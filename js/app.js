@@ -100,17 +100,23 @@ async function createRoom() {
 
     alert(`房间创建成功！\n房间号: ${roomCode}\n\n请把房间号发给对手加入。`);
 
-    // 监听对手加入 → 开始游戏
-    supabaseClient
-        .channel(`room-join:${roomCode}`)
-        .on('broadcast', { event: 'player_joined' }, (payload) => {
+    // 轮询检测对手是否加入
+    const checkInterval = setInterval(async () => {
+        const { data: room } = await supabaseClient
+            .from('rooms')
+            .select('status, player2_name')
+            .eq('room_code', roomCode)
+            .single();
+
+        if (room && room.status === 'playing') {
+            clearInterval(checkInterval);
             document.getElementById('name-p2').textContent = '玩家2';
             subscribeToRoom(roomCode);
             enterGameRoom(roomCode, currentProblem);
             addLog('对手已加入！游戏开始！');
             document.getElementById('turn-indicator').textContent = '⚡ 轮到你出手！';
-        })
-        .subscribe();
+        }
+    }, 1000);
 }
 
 async function joinRoom() {
@@ -144,14 +150,88 @@ async function joinRoom() {
 
     subscribeToRoom(roomCode);
     enterGameRoom(roomCode, currentProblem);
-
-    // 通知房主对手已加入 → 房主也会开始
-    await supabaseClient.channel(`room-join:${roomCode}`).send({
-        type: 'player_joined',
-        payload: {}
-    });
 }
 
+// ==================== 单人模式 ====================
+async function startSinglePlayer() {
+    const problemId = document.getElementById('problem-select').value;
+    currentProblem = PROBLEMS.find(p => p.id === problemId);
+    myRoomCode = 'single-' + Date.now();
+    myPlayerNumber = 1;
+
+    document.getElementById('room-lobby').style.display = 'none';
+    document.getElementById('game-room').style.display = 'block';
+    document.getElementById('room-badge').textContent = '单人模式';
+    document.getElementById('name-p1').textContent = '你';
+    document.getElementById('name-p2').textContent = '🤖 AI';
+    document.getElementById('log-list').innerHTML = '';
+
+    gameEngine = new GameEngine(currentProblem);
+    renderBoard();
+    updateTurnDisplaySingle();
+    startTimer();
+    addLog('单人模式开始！你是先手。');
+}
+
+function updateTurnDisplaySingle() {
+    const indicator = document.getElementById('turn-indicator');
+    const isMyTurn = gameEngine.currentPlayer === 1;
+
+    document.getElementById('panel-p1').classList.toggle('active-turn', isMyTurn);
+    document.getElementById('panel-p2').classList.toggle('active-turn', !isMyTurn);
+
+    indicator.textContent = isMyTurn ? '⚡ 轮到你出手！' : '🤖 AI 思考中...';
+}
+
+function aiMove() {
+    if (gameEngine.currentPlayer !== 2) return;
+
+    const nonEmptyPiles = [];
+    gameEngine.piles.forEach((count, i) => {
+        if (count > 0) nonEmptyPiles.push(i);
+    });
+
+    if (nonEmptyPiles.length === 0) return;
+
+    const pileIndex = nonEmptyPiles[Math.floor(Math.random() * nonEmptyPiles.length)];
+    let maxTake = gameEngine.piles[pileIndex];
+    if (currentProblem.rule === 'bash' && currentProblem.maxTake) {
+        maxTake = Math.min(maxTake, currentProblem.maxTake);
+    }
+
+    const count = Math.floor(Math.random() * maxTake) + 1;
+
+    setTimeout(() => {
+        gameEngine.makeMove(pileIndex, count);
+        addLog(`🤖 AI 从第${pileIndex + 1}堆取走${count}个石子`);
+
+        const winner = gameEngine.checkGameOver();
+        if (winner) {
+            endGameSingle(winner);
+            return;
+        }
+
+        gameEngine.switchPlayer();
+        renderBoard();
+        updateTurnDisplaySingle();
+        resetTimer();
+    }, 800 + Math.random() * 1200);
+}
+
+function endGameSingle(winner) {
+    clearInterval(timerInterval);
+
+    const isMeWin = winner === 1;
+    document.getElementById('turn-indicator').textContent = isMeWin ? '🎉 你赢了！' : '😢 AI 赢了！';
+    document.getElementById('game-controls').innerHTML = `
+        <div style="text-align:center;padding:20px;">
+            <h2>${isMeWin ? '🎉 恭喜获胜！' : '😢 败北！'}</h2>
+            <button class="btn-primary" onclick="location.reload()">🔄 再来一局</button>
+        </div>
+    `;
+}
+
+// ==================== Realtime 订阅 ====================
 async function subscribeToRoom(roomCode) {
     channel = supabaseClient.channel(`room:${roomCode}`);
 
@@ -195,8 +275,14 @@ function renderBoard() {
 
 function renderControls() {
     const controls = document.getElementById('game-controls');
-    const isMyTurn = gameEngine.currentPlayer === myPlayerNumber;
 
+    // 单人模式且轮到AI
+    if (myRoomCode && myRoomCode.startsWith('single-') && gameEngine.currentPlayer === 2) {
+        controls.innerHTML = `<div class="waiting-overlay">🤖 AI 思考中...</div>`;
+        return;
+    }
+
+    const isMyTurn = gameEngine.currentPlayer === myPlayerNumber;
     if (!isMyTurn) {
         controls.innerHTML = `<div class="waiting-overlay">⏳ 等待对手出手...</div>`;
         return;
@@ -224,7 +310,11 @@ function renderControls() {
 }
 
 function selectPile(index) {
-    if (gameEngine.currentPlayer !== myPlayerNumber) return;
+    if (myRoomCode && myRoomCode.startsWith('single-')) {
+        if (gameEngine.currentPlayer !== 1) return;
+    } else {
+        if (gameEngine.currentPlayer !== myPlayerNumber) return;
+    }
     if (gameEngine.piles[index] === 0) return;
 
     gameEngine.selectedPile = gameEngine.selectedPile === index ? null : index;
@@ -232,7 +322,10 @@ function selectPile(index) {
 }
 
 async function makeMove() {
-    if (gameEngine.currentPlayer !== myPlayerNumber) return;
+    const isSingle = myRoomCode && myRoomCode.startsWith('single-');
+
+    if (!isSingle && gameEngine.currentPlayer !== myPlayerNumber) return;
+    if (isSingle && gameEngine.currentPlayer !== 1) return;
     if (gameEngine.selectedPile === null) return;
 
     const count = parseInt(document.getElementById('take-count').value);
@@ -244,33 +337,47 @@ async function makeMove() {
     }
 
     gameEngine.makeMove(pileIndex, count);
-    addLog(`玩家${myPlayerNumber} 从第${pileIndex + 1}堆取走${count}个石子`);
+    addLog(`${isSingle ? '你' : '玩家' + myPlayerNumber} 从第${pileIndex + 1}堆取走${count}个石子`);
 
-    await channel.send({
-        type: 'move',
-        payload: {
-            pileIndex,
-            count,
-            state: gameEngine.getState()
-        }
-    });
+    // 联机模式：广播操作
+    if (!isSingle && channel) {
+        await channel.send({
+            type: 'move',
+            payload: { pileIndex, count, state: gameEngine.getState() }
+        });
 
-    await supabaseClient.from('moves').insert({
-        room_code: myRoomCode,
-        player: `player${myPlayerNumber}`,
-        move_data: { pileIndex, count }
-    });
+        await supabaseClient.from('moves').insert({
+            room_code: myRoomCode,
+            player: `player${myPlayerNumber}`,
+            move_data: { pileIndex, count }
+        });
+    }
 
+    // 检查游戏结束
     const winner = gameEngine.checkGameOver();
     if (winner) {
-        endGame(winner);
+        if (isSingle) {
+            endGameSingle(winner);
+        } else {
+            endGame(winner);
+        }
         return;
     }
 
     gameEngine.switchPlayer();
     renderBoard();
-    updateTurnDisplay();
-    resetTimer();
+
+    if (isSingle) {
+        updateTurnDisplaySingle();
+        resetTimer();
+        // AI 回合
+        if (gameEngine.currentPlayer === 2) {
+            aiMove();
+        }
+    } else {
+        updateTurnDisplay();
+        resetTimer();
+    }
 }
 
 function handleRemoteMove(payload) {
@@ -315,10 +422,7 @@ function endGame(winner) {
     `;
 
     if (channel) {
-        channel.send({
-            type: 'game_over',
-            payload: { winner }
-        });
+        channel.send({ type: 'game_over', payload: { winner } });
     }
 
     supabaseClient.from('rooms').update({ status: 'finished', winner: `player${winner}` }).eq('room_code', myRoomCode);
@@ -328,6 +432,7 @@ function endGame(winner) {
 function startTimer() {
     timeLeft = currentProblem.timeLimit;
     updateTimerDisplay();
+    clearInterval(timerInterval);
     timerInterval = setInterval(() => {
         timeLeft--;
         updateTimerDisplay();
@@ -344,18 +449,31 @@ function resetTimer() {
 }
 
 function updateTimerDisplay() {
-    const timerId = gameEngine.currentPlayer === 1 ? 'timer-p1' : 'timer-p2';
+    const isSingle = myRoomCode && myRoomCode.startsWith('single-');
+    const currentPlayer = gameEngine.currentPlayer;
+    const timerId = currentPlayer === 1 ? 'timer-p1' : 'timer-p2';
     const el = document.getElementById(timerId);
     el.textContent = timeLeft;
     if (timeLeft <= 10) el.classList.add('danger');
     else el.classList.remove('danger');
+
+    // 单人模式：隐藏非当前玩家的计时器
+    if (isSingle) {
+        const otherId = currentPlayer === 1 ? 'timer-p2' : 'timer-p1';
+        document.getElementById(otherId).textContent = '--';
+    }
 }
 
 function handleTimeout() {
     const loser = gameEngine.currentPlayer;
     const winner = loser === 1 ? 2 : 1;
     addLog(`⏰ 玩家${loser} 超时！玩家${winner} 获胜！`);
-    endGame(winner);
+
+    if (myRoomCode && myRoomCode.startsWith('single-')) {
+        endGameSingle(winner);
+    } else {
+        endGame(winner);
+    }
 }
 
 function updateTurnDisplay() {
