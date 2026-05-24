@@ -171,20 +171,6 @@ async function startSinglePlayer() {
     addLog(`【${currentProblem.name}】单人模式开始！你是先手。`);
 }
 
-// ==================== AI ====================
-function getMaxPileIndex() {
-    let maxIdx = 0;
-    for (let i = 1; i < gameEngine.piles.length; i++) {
-        if (gameEngine.piles[i] > gameEngine.piles[maxIdx]) maxIdx = i;
-    }
-    return maxIdx;
-}
-
-function getMaxTake(pileIndex) {
-    let max = gameEngine.piles[pileIndex];
-    if (currentProblem.maxTake) max = Math.min(max, currentProblem.maxTake);
-    return max;
-}
 // ========== AI 辅助函数 ==========
 function getMaxPileIndex() {
     let maxIdx = 0;
@@ -200,23 +186,20 @@ function getMaxTake(pileIndex) {
     return max;
 }
 
-// ========== 巴什博弈必败态 ==========
 function getBashBestMove() {
     const total = gameEngine.piles[0];
     const m = currentProblem.maxTake;
     const remainder = total % (m + 1);
-    // 如果 remainder != 0，取 remainder 个就让对手进入必败态
     if (remainder !== 0 && remainder <= m) {
         return { pileIndex: 0, count: remainder };
     }
-    return null; // 已经在必败态
+    return null;
 }
 
-// ========== Nim 博弈必败态 ==========
 function getNimBestMove() {
     let nimSum = 0;
     gameEngine.piles.forEach(c => nimSum ^= c);
-    if (nimSum === 0) return null; // 已在必败态
+    if (nimSum === 0) return null;
 
     for (let i = 0; i < gameEngine.piles.length; i++) {
         const target = gameEngine.piles[i] ^ nimSum;
@@ -227,7 +210,6 @@ function getNimBestMove() {
     return null;
 }
 
-// ========== AI 主函数 ==========
 function aiMove() {
     if (gameEngine.currentPlayer !== 2) return;
 
@@ -241,34 +223,33 @@ function aiMove() {
     let pileIndex, count;
     let bestMove = null;
 
-    // 尝试找最优解
     if (currentProblem.rule === 'bash') {
         bestMove = getBashBestMove();
     } else if (currentProblem.rule === 'nim') {
         bestMove = getNimBestMove();
     }
 
-    // 决策：70% 概率走最优，20% 走次优，10% 失误
     const roll = Math.random();
 
     if (bestMove && roll < 0.7) {
-        // 走最优解
         pileIndex = bestMove.pileIndex;
         count = bestMove.count;
     } else if (bestMove && roll < 0.9) {
-        // 走次优：改变拿取数量
         pileIndex = bestMove.pileIndex;
         const maxT = getMaxTake(pileIndex);
-        // 随机但避开最优解
         do {
             count = Math.floor(Math.random() * maxT) + 1;
         } while (count === bestMove.count && maxT > 1);
     } else {
-        // 失误/随意走
         switch (aiConfig.style) {
             case 'aggressive':
                 pileIndex = getMaxPileIndex();
                 count = getMaxTake(pileIndex);
+                break;
+            case 'destroyer':
+                pileIndex = getMaxPileIndex();
+                if (Math.random() < 0.5) count = gameEngine.piles[pileIndex];
+                else count = Math.floor(gameEngine.piles[pileIndex] / 2) + 1;
                 break;
             case 'balancer':
                 if (gameEngine.piles.length >= 2) {
@@ -280,6 +261,17 @@ function aiMove() {
                     count = Math.floor(Math.random() * getMaxTake(pileIndex)) + 1;
                 }
                 break;
+            case 'tricky':
+                pileIndex = getMaxPileIndex();
+                const r = Math.random();
+                if (r < 0.4) count = getMaxTake(pileIndex);
+                else if (r < 0.7) count = 1;
+                else count = Math.floor(Math.random() * getMaxTake(pileIndex)) + 1;
+                break;
+            case 'copycat':
+                pileIndex = getMaxPileIndex();
+                count = Math.min(3, getMaxTake(pileIndex));
+                break;
             case 'cautious':
                 pileIndex = getMaxPileIndex();
                 count = 1;
@@ -290,14 +282,12 @@ function aiMove() {
         }
     }
 
-    // 合法性检查
     if (pileIndex === undefined || pileIndex < 0) {
         pileIndex = nonEmptyPiles[0];
     }
     count = Math.max(1, Math.min(count, gameEngine.piles[pileIndex]));
     if (currentProblem.maxTake) count = Math.min(count, currentProblem.maxTake);
 
-    // 延迟执行
     const delay = 600 + Math.random() * 1400;
     document.getElementById('turn-indicator').textContent = '🤖 AI 思考中...';
     document.getElementById('game-controls').innerHTML = '<div class="waiting-overlay">🤖 AI 思考中...</div>';
@@ -318,6 +308,7 @@ function aiMove() {
         resetTimer();
     }, delay);
 }
+
 function endGameSingle(winner) {
     clearInterval(timerInterval);
     const isMeWin = winner === 1;
@@ -361,21 +352,17 @@ function renderBoard() {
 
     switch (boardType) {
         case 'single-row':
-            // 巴什博弈：一排石子
             board.innerHTML = `
                 <div class="bash-row">
                     <div class="bash-label">石子总数：<strong>${piles[0]}</strong></div>
                     <div class="bash-stones">
-                        ${Array(piles[0]).fill(0).map((_, i) => `
-                            <div class="stone stone-big ${i >= piles[0] ? 'stone-gone' : ''}"></div>
-                        `).join('')}
+                        ${Array(piles[0]).fill(0).map(() => '<div class="stone stone-big"></div>').join('')}
                     </div>
                 </div>
             `;
             break;
 
         case 'wythoff':
-            // 威佐夫：两堆 + 同时取选项
             board.innerHTML = `
                 <div class="board-row">
                     ${piles.map((count, i) => `
@@ -399,7 +386,6 @@ function renderBoard() {
 
         case 'multi-pile':
         default:
-            // Nim：多堆
             board.innerHTML = `
                 <div class="board-row">
                     ${piles.map((count, i) => `
@@ -424,7 +410,7 @@ function selectBothPiles() {
     if (myRoomCode && myRoomCode.startsWith('single-') && gameEngine.currentPlayer !== 1) return;
     if (!myRoomCode.startsWith('single-') && gameEngine.currentPlayer !== myPlayerNumber) return;
 
-    gameEngine.selectedPile = -1; // -1 表示两堆同时取
+    gameEngine.selectedPile = -1;
     renderBoard();
 }
 
@@ -447,7 +433,6 @@ function renderControls() {
         return;
     }
 
-    // 威佐夫两堆同时取
     if (currentProblem.boardType === 'wythoff' && gameEngine.selectedPile === -1) {
         const minPile = Math.min(gameEngine.piles[0], gameEngine.piles[1]);
         controls.innerHTML = `
@@ -498,7 +483,6 @@ async function makeMove() {
     const isWythoffBoth = gameEngine.selectedPile === -1;
 
     if (isWythoffBoth) {
-        // 威佐夫：两堆同时取
         if (count > gameEngine.piles[0] || count > gameEngine.piles[1]) {
             alert('数量超过其中一堆！');
             return;
