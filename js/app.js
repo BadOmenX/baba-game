@@ -72,7 +72,7 @@ async function createRoom() {
             game_state: { piles: [...problem.piles], currentPlayer: 1, moveHistory: [] },
             current_turn: 'player1',
             player1_name: '玩家1',
-            player2_name: '玩家2',
+            player2_name: '等待中...',
             status: 'waiting',
         });
 
@@ -85,9 +85,33 @@ async function createRoom() {
     myPlayerNumber = 1;
     currentProblem = problem;
 
-    enterGameRoom(roomCode, problem);
-    subscribeToRoom(roomCode);
+    // 显示等待界面
+    document.getElementById('room-lobby').style.display = 'none';
+    document.getElementById('game-room').style.display = 'block';
+    document.getElementById('room-badge').textContent = roomCode;
+    document.getElementById('name-p1').textContent = '你 (玩家1)';
+    document.getElementById('name-p2').textContent = '等待加入...';
+    document.getElementById('game-board').innerHTML = '';
+    document.getElementById('game-controls').innerHTML = '';
+    document.getElementById('turn-indicator').textContent = '等待对手加入...';
+    document.getElementById('timer-p1').textContent = '--';
+    document.getElementById('timer-p2').textContent = '--';
+    document.getElementById('log-list').innerHTML = '';
+
     alert(`房间创建成功！\n房间号: ${roomCode}\n\n请把房间号发给对手加入。`);
+
+    // 监听房间状态变化
+    subscribeToRoom(roomCode);
+
+    // 监听对手加入
+    supabaseClient
+        .channel(`room-join:${roomCode}`)
+        .on('broadcast', { event: 'player_joined' }, (payload) => {
+            document.getElementById('name-p2').textContent = '玩家2';
+            enterGameRoom(roomCode, currentProblem);
+            alert('对手已加入！游戏开始！');
+        })
+        .subscribe();
 }
 
 async function joinRoom() {
@@ -114,11 +138,22 @@ async function joinRoom() {
     myPlayerNumber = 2;
     currentProblem = PROBLEMS.find(p => p.id === room.problem_id);
 
-    await supabaseClient.from('rooms').update({ status: 'playing' }).eq('room_code', roomCode);
+    // 更新房间状态
+    await supabaseClient.from('rooms').update({
+        status: 'playing',
+        player2_name: '玩家2'
+    }).eq('room_code', roomCode);
 
     enterGameRoom(roomCode, currentProblem);
     subscribeToRoom(roomCode);
 
+    // 通知房主对手已加入
+    await supabaseClient.channel(`room-join:${roomCode}`).send({
+        type: 'player_joined',
+        payload: {}
+    });
+
+    // 通知游戏开始
     await channel.send({
         type: 'game_start',
         problem: currentProblem
@@ -287,10 +322,12 @@ function endGame(winner) {
         </div>
     `;
 
-    channel.send({
-        type: 'game_over',
-        payload: { winner }
-    });
+    if (channel) {
+        channel.send({
+            type: 'game_over',
+            payload: { winner }
+        });
+    }
 
     supabaseClient.from('rooms').update({ status: 'finished', winner: `player${winner}` }).eq('room_code', myRoomCode);
 }
