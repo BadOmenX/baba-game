@@ -8,8 +8,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+    <div class="bg-gradient"></div>
     <header>
-        <div class="logo">🎮 巴巴博弈</div>
+        <div class="logo" onclick="switchPage('home')">🎮 巴巴博弈</div>
         <nav>
             <button class="nav-btn active" data-page="home">首页</button>
             <button class="nav-btn" data-page="problems">题库</button>
@@ -23,9 +24,15 @@
             <div class="hero">
                 <h1>🕹️ 巴巴博弈</h1>
                 <p class="subtitle">巴什博弈 · Nim游戏 · 威佐夫博弈 · 在线实时对战</p>
+                <p class="hero-desc">选择规则，挑选难度，与AI或好友展开智力对决</p>
                 <div class="hero-buttons">
-                    <button class="btn-primary btn-lg" onclick="switchPage('battle')">⚔️ 开始对战</button>
+                    <button class="btn-primary btn-lg pulse" onclick="switchPage('battle')">⚔️ 开始对战</button>
                     <button class="btn-secondary btn-lg" onclick="switchPage('problems')">📚 浏览题库</button>
+                </div>
+                <div class="hero-stats">
+                    <div class="stat"><span class="stat-num">6+</span><span class="stat-label">博弈类型</span></div>
+                    <div class="stat"><span class="stat-num">3</span><span class="stat-label">难度等级</span></div>
+                    <div class="stat"><span class="stat-num">∞</span><span class="stat-label">策略组合</span></div>
                 </div>
             </div>
         </section>
@@ -40,18 +47,46 @@
         <section id="battle" class="page">
             <h2>⚔️ 对战房间</h2>
             <div id="room-lobby">
-                <div class="room-actions">
-                    <button class="btn-primary" onclick="createRoom()">🏠 创建房间</button>
-                    <button class="btn-secondary" onclick="startSinglePlayer()">🤖 单人模式</button>
-                    <span class="or-divider">或</span>
-                    <div class="join-area">
-                        <input type="text" id="room-code-input" placeholder="输入6位房间号" maxlength="6">
-                        <button class="btn-secondary" onclick="joinRoom()">🚪 加入房间</button>
-                    </div>
+                <!-- 步骤1：选规则 -->
+                <div class="setup-step" id="step-rule">
+                    <h3>🎯 选择博弈规则</h3>
+                    <div class="rule-cards" id="rule-cards"></div>
                 </div>
-                <div class="problem-select">
-                    <label>选择题目：</label>
-                    <select id="problem-select"></select>
+                <!-- 步骤2：选模式 + 难度 + 配置 -->
+                <div class="setup-step hidden" id="step-config">
+                    <h3>⚙️ 对战设置</h3>
+                    <div class="mode-select">
+                        <button class="mode-btn active" data-mode="single" onclick="selectMode('single')">🤖 单人模式</button>
+                        <button class="mode-btn" data-mode="multi" onclick="selectMode('multi')">👥 双人对战</button>
+                    </div>
+                    <div id="single-config">
+                        <div class="config-row">
+                            <label>AI 难度：</label>
+                            <div class="difficulty-select">
+                                <button class="diff-btn" data-diff="easy" onclick="selectDifficulty('easy')">😊 简单</button>
+                                <button class="diff-btn active" data-diff="medium" onclick="selectDifficulty('medium')">🤔 中等</button>
+                                <button class="diff-btn" data-diff="hard" onclick="selectDifficulty('hard')">🧠 困难</button>
+                            </div>
+                        </div>
+                        <div class="config-row">
+                            <label>石子数量：</label>
+                            <div class="stone-config">
+                                <input type="number" id="custom-stones" placeholder="默认" min="1">
+                                <button class="btn-secondary btn-sm" onclick="randomStones()">🎲 随机</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="multi-config" class="hidden">
+                        <div class="room-actions">
+                            <button class="btn-primary" onclick="createRoom()">🏠 创建房间</button>
+                            <span class="or-divider">或</span>
+                            <div class="join-area">
+                                <input type="text" id="room-code-input" placeholder="输入6位房间号" maxlength="6">
+                                <button class="btn-secondary" onclick="joinRoom()">🚪 加入房间</button>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="btn-primary btn-lg" onclick="startGame()" style="margin-top:20px;">🚀 开始游戏</button>
                 </div>
             </div>
 
@@ -63,8 +98,9 @@
                         <div class="player-timer" id="timer-p1">30</div>
                     </div>
                     <div class="game-info">
-                        <div class="room-badge">房间 <span id="room-badge">---</span></div>
+                        <div class="room-badge"><span id="room-badge">---</span></div>
                         <div class="turn-indicator" id="turn-indicator">等待开始...</div>
+                        <button class="btn-surrender" onclick="surrender()">🏳️ 认输</button>
                     </div>
                     <div class="player-panel" id="panel-p2">
                         <div class="player-avatar">🔵</div>
@@ -74,7 +110,6 @@
                 </div>
 
                 <div class="game-board" id="game-board"></div>
-
                 <div class="game-controls" id="game-controls"></div>
 
                 <div class="game-log">
