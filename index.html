@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>巴巴博弈 - 在线博弈论对战平台</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <header>
+        <div class="logo">🎮 巴巴博弈</div>
+        <nav>
+            <button class="nav-btn active" data-page="home">首页</button>
+            <button class="nav-btn" data-page="problems">题库</button>
+            <button class="nav-btn" data-page="battle">对战</button>
+        </nav>
+    </header>
+
+    <main>
+        <!-- 首页 -->
+        <section id="home" class="page active">
+            <div class="hero">
+                <h1>🕹️ 巴巴博弈</h1>
+                <p class="subtitle">巴什博弈 · Nim游戏 · 威佐夫博弈 · 在线实时对战</p>
+                <div class="hero-buttons">
+                    <button class="btn-primary btn-lg" onclick="switchPage('battle')">⚔️ 开始对战</button>
+                    <button class="btn-secondary btn-lg" onclick="switchPage('problems')">📚 浏览题库</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 题库页 -->
+        <section id="problems" class="page">
+            <h2>📚 博弈论题库</h2>
+            <div class="problem-grid" id="problem-grid"></div>
+        </section>
+
+        <!-- 对战页 -->
+        <section id="battle" class="page">
+            <h2>⚔️ 对战房间</h2>
+            <div id="room-lobby">
+                <div class="room-actions">
+                    <button class="btn-primary" onclick="createRoom()">🏠 创建房间</button>
+                    <span class="or-divider">或</span>
+                    <div class="join-area">
+                        <input type="text" id="room-code-input" placeholder="输入6位房间号" maxlength="6">
+                        <button class="btn-secondary" onclick="joinRoom()">🚪 加入房间</button>
+                    </div>
+                </div>
+                <div class="problem-select">
+                    <label>选择题目：</label>
+                    <select id="problem-select"></select>
+                </div>
+            </div>
+
+            <div id="game-room" style="display:none;">
+                <div class="game-top-bar">
+                    <div class="player-panel" id="panel-p1">
+                        <div class="player-avatar">🔴</div>
+                        <div class="player-name" id="name-p1">玩家1</div>
+                        <div class="player-timer" id="timer-p1">30</div>
+                    </div>
+                    <div class="game-info">
+                        <div class="room-badge">房间 <span id="room-badge">---</span></div>
+                        <div class="turn-indicator" id="turn-indicator">等待开始...</div>
+                    </div>
+                    <div class="player-panel" id="panel-p2">
+                        <div class="player-avatar">🔵</div>
+                        <div class="player-name" id="name-p2">玩家2</div>
+                        <div class="player-timer" id="timer-p2">30</div>
+                    </div>
+                </div>
+
+                <div class="game-board" id="game-board"></div>
+
+                <div class="game-controls" id="game-controls"></div>
+
+                <div class="game-log">
+                    <h4>📜 对战记录</h4>
+                    <div id="log-list"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer><p>🐛 巴巴博弈 · BadOmenX · 2026</p></footer>
+
+    <script src="js/config.js"></script>
+    <script src="js/problems.js"></script>
+    <script src="js/game.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
