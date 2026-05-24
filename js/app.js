@@ -234,7 +234,7 @@ async function aiMove() {
         rulesText = `威佐夫博弈：有2堆石子，每次可以从一堆取任意数量，或从两堆取相同数量，取走最后一个获胜。`;
     }
 
-        const prompt = `你正在和人类玩${currentProblem.name}。
+    const prompt = `你正在和人类玩${currentProblem.name}。
 
 规则：${rulesText}
 
@@ -249,7 +249,7 @@ async function aiMove() {
 选择：{"pile":堆号从1开始,"count":取走数量}
 ${currentProblem.rule === 'wythoff' ? '两堆同时取用{"pile":0,"count":N}' : ''}`;
 
-        try {
+    try {
         const response = await fetch(AI_WORKER_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -263,13 +263,11 @@ ${currentProblem.rule === 'wythoff' ? '两堆同时取用{"pile":0,"count":N}' :
         const content = data.content || '';
         console.log('AI 回复内容:', content);
 
-        // 提取分析部分
         const analysisMatch = content.match(/分析[：:]\s*(.+)/);
         if (analysisMatch) {
             addLog(`💭 AI分析: ${analysisMatch[1]}`);
         }
 
-        // 提取JSON
         const jsonMatch = content.match(/\{[\s\S]*?\}/);
         if (!jsonMatch) throw new Error('AI返回格式错误');
 
@@ -391,11 +389,19 @@ function renderBoard() {
 
     switch (boardType) {
         case 'single-row':
+            const total = piles[0];
+            let stoneSize = 28;
+            if (total > 30) stoneSize = 20;
+            if (total > 50) stoneSize = 16;
+            if (total > 80) stoneSize = 12;
+            
             board.innerHTML = `
                 <div class="bash-row">
-                    <div class="bash-label">石子总数：<strong>${piles[0]}</strong></div>
-                    <div class="bash-stones">
-                        ${Array(piles[0]).fill(0).map(() => '<div class="stone stone-big"></div>').join('')}
+                    <div class="bash-label">石子总数：<strong>${total}</strong></div>
+                    <div class="bash-stones" style="max-width:100%;flex-wrap:wrap;gap:4px;">
+                        ${Array(total).fill(0).map(() => 
+                            `<div class="stone" style="width:${stoneSize}px;height:${stoneSize}px;flex-shrink:0;"></div>`
+                        ).join('')}
                     </div>
                 </div>
             `;
@@ -409,7 +415,8 @@ function renderBoard() {
                              onclick="selectPile(${i})">
                             <div class="pile-label">第${i + 1}堆</div>
                             <div class="pile-stones">
-                                ${Array(count).fill(0).map(() => '<div class="stone"></div>').join('')}
+                                ${Array(Math.min(count, 20)).fill(0).map(() => '<div class="stone"></div>').join('')}
+                                ${count > 20 ? `<div style="font-size:12px;color:#94a3b8;">+${count - 20}</div>` : ''}
                             </div>
                             <div class="pile-count">${count}</div>
                         </div>
@@ -432,7 +439,8 @@ function renderBoard() {
                              onclick="selectPile(${i})">
                             <div class="pile-label">第${i + 1}堆</div>
                             <div class="pile-stones">
-                                ${Array(count).fill(0).map(() => '<div class="stone"></div>').join('')}
+                                ${Array(Math.min(count, 15)).fill(0).map(() => '<div class="stone"></div>').join('')}
+                                ${count > 15 ? `<div style="font-size:12px;color:#94a3b8;">+${count - 15}</div>` : ''}
                             </div>
                             <div class="pile-count">${count}</div>
                         </div>
@@ -465,6 +473,11 @@ function renderControls() {
     if (!isSingle && gameEngine.currentPlayer !== myPlayerNumber) {
         controls.innerHTML = `<div class="waiting-overlay">⏳ 等待对手出手...</div>`;
         return;
+    }
+
+    // 巴什博弈自动选中
+    if (currentProblem.boardType === 'single-row' && gameEngine.selectedPile === null && gameEngine.piles[0] > 0) {
+        gameEngine.selectedPile = 0;
     }
 
     if (gameEngine.selectedPile === null) {
