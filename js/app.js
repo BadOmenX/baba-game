@@ -249,8 +249,7 @@ async function aiMove() {
 选择：{"pile":堆号从1开始,"count":取走数量}
 ${currentProblem.rule === 'wythoff' ? '两堆同时取用{"pile":0,"count":N}' : ''}`;
 
-    try {
-        
+        try {
         const response = await fetch(AI_WORKER_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -263,9 +262,6 @@ ${currentProblem.rule === 'wythoff' ? '两堆同时取用{"pile":0,"count":N}' :
         
         const content = data.content || '';
         console.log('AI 回复内容:', content);
-        const data = await response.json();
-                const content = data.content || '';
-        console.log('AI思考:', content);
 
         // 提取分析部分
         const analysisMatch = content.match(/分析[：:]\s*(.+)/);
