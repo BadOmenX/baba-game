@@ -113,10 +113,13 @@ function randomStones() {
     const input = document.getElementById('custom-stones');
     if (problem.rule === 'bash') {
         input.value = Math.floor(Math.random() * 40) + 10;
+        input.placeholder = '石子数量';
     } else if (problem.rule === 'nim' || problem.rule === 'decreasing') {
         input.value = Math.floor(Math.random() * 4) + 2;
+        input.placeholder = '堆数';
     } else if (problem.rule === 'fragmented-nim') {
         input.value = Math.floor(Math.random() * 3) + 2;
+        input.placeholder = '堆数';
     } else if (problem.rule === 'wythoff') {
         input.value = (Math.floor(Math.random() * 15) + 3) + ', ' + (Math.floor(Math.random() * 15) + 3);
         input.placeholder = '例如: 6, 10';
@@ -125,7 +128,7 @@ function randomStones() {
         input.placeholder = '例如: 25, 7';
     } else if (problem.rule === 'letter-picking') {
         const chars = 'ABCDEFGH';
-        const len = Math.floor(Math.random() * 4) + 4;
+        const len = Math.floor(Math.random() * 3) + 2;
         let word = '';
         for (let i = 0; i < len * 2; i++) word += chars[Math.floor(Math.random() * chars.length)];
         input.value = word;
@@ -259,13 +262,15 @@ async function joinRoom() {
 async function startSinglePlayer() {
     const problem = PROBLEMS.find(p => p.id === selectedRule);
     customPiles = getCustomPiles();
-    const piles = customPiles || [...problem.defaultPiles];
-        // 字符串题目特殊处理
+    
     if (problem.rule === 'letter-picking') {
-        const word = customPiles || problem.defaultWord || 'ABBAABBA';
+        const word = typeof customPiles === 'string' ? customPiles : problem.defaultWord || 'ABBAABBA';
         currentProblem = { ...problem, word, piles: [] };
+    } else {
+        const piles = customPiles || [...problem.defaultPiles];
+        currentProblem = { ...problem, piles };
     }
-    currentProblem = { ...problem, piles };
+    
     myRoomCode = 'single-' + Date.now();
     myPlayerNumber = 1;
 
@@ -526,8 +531,11 @@ function renderBoard() {
             const word = currentProblem.word || 'ABBAABBA';
             board.innerHTML = `
                 <div class="bash-row">
-                    <div class="bash-label">字符串：<strong style="font-size:24px;letter-spacing:8px;">${word}</strong></div>
-                    <div style="margin-top:12px;color:#94a3b8;">玩家1序列：<span id="seq1">-</span> | 玩家2序列：<span id="seq2">-</span></div>
+                    <div class="bash-label">📝 字符串：<strong style="font-size:28px;letter-spacing:6px;">${word}</strong></div>
+                    <div style="margin-top:16px;display:flex;justify-content:center;gap:40px;">
+                        <div>🔴 玩家1：<strong id="seq1">-</strong></div>
+                        <div>🔵 玩家2：<strong id="seq2">-</strong></div>
+                    </div>
                 </div>
             `;
             break;
@@ -552,8 +560,62 @@ function selectBothPiles() {
     gameEngine.selectedPile = -1;
     renderBoard();
 }
+function pickLetter(side) {
+    const isSingle = myRoomCode && myRoomCode.startsWith('single-');
+    if (!isSingle && gameEngine.currentPlayer !== myPlayerNumber) return;
+    if (isSingle && gameEngine.currentPlayer !== 1) return;
 
+    const word = currentProblem.word;
+    const letter = side === 'left' ? word[0] : word[word.length - 1];
+    const newWord = side === 'left' ? word.slice(1) : word.slice(0, -1);
+    
+    currentProblem.word = newWord;
+    gameEngine.moveHistory.push({ player: gameEngine.currentPlayer, side, letter, wordAfter: newWord });
+
+    addLog(`${isSingle ? '你' : '玩家' + myPlayerNumber} 取${side === 'left' ? '左' : '右'}端 "${letter}"`);
+    document.getElementById(`seq${gameEngine.currentPlayer}`).textContent = 
+        (document.getElementById(`seq${gameEngine.currentPlayer}`).textContent === '-' ? '' : document.getElementById(`seq${gameEngine.currentPlayer}`).textContent) + letter;
+
+    if (newWord.length === 0) {
+        // 比较字典序
+        const seq1 = document.getElementById('seq1').textContent;
+        const seq2 = document.getElementById('seq2').textContent;
+        const winner = seq1 > seq2 ? 1 : seq2 > seq1 ? 2 : 0;
+        if (winner === 0) {
+            addLog('🤝 平局！');
+            document.getElementById('turn-indicator').textContent = '🤝 平局！';
+            document.getElementById('game-controls').innerHTML = `
+                <div style="text-align:center;padding:20px;">
+                    <h2>🤝 平局！</h2>
+                    <button class="btn-primary" onclick="location.reload()">🔄 再来一局</button>
+                </div>`;
+            clearInterval(timerInterval);
+        } else {
+            isSingle ? endGameSingle(winner) : endGame(winner);
+        }
+        return;
+    }
+
+    gameEngine.switchPlayer();
+    renderBoard();
+    if (isSingle) { updateTurnDisplaySingle(); resetTimer(); if (gameEngine.currentPlayer === 2) aiMove(); }
+    else { updateTurnDisplay(); resetTimer(); }
+}
 function renderControls() {
+    if (currentProblem.boardType === 'text' && gameEngine.currentPlayer === (myRoomCode && myRoomCode.startsWith('single-') ? 1 : myPlayerNumber)) {
+        const isSingle = myRoomCode && myRoomCode.startsWith('single-');
+        if (!isSingle && gameEngine.currentPlayer !== myPlayerNumber) {
+            controls.innerHTML = '<div class="waiting-overlay">⏳ 等待对手出手...</div>';
+            return;
+        }
+        controls.innerHTML = `
+            <div class="take-controls">
+                <button class="btn-primary" onclick="pickLetter('left')">⬅️ 取左边</button>
+                <button class="btn-primary" onclick="pickLetter('right')">➡️ 取右边</button>
+            </div>
+        `;
+        return;
+    }
     const controls = document.getElementById('game-controls');
     const isSingle = myRoomCode && myRoomCode.startsWith('single-');
 
