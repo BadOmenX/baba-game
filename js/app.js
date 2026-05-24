@@ -234,15 +234,16 @@ async function aiMove() {
         rulesText = `威佐夫博弈：有2堆石子，每次可以从一堆取任意数量，或从两堆取相同数量，取走最后一个获胜。`;
     }
 
-    const prompt = `你是一个博弈论高手。现在正在进行${currentProblem.name}。
+    const prompt = `你正在和人类玩${currentProblem.name}。
 
 规则：${rulesText}
 
 当前局面：${gameEngine.piles.map((c, i) => `第${i + 1}堆: ${c}个`).join('，')}
 
-轮到你出手。请选择最优策略。
-请只回复JSON格式：{"pile": 堆号(从1开始), "count": 取走数量}${currentProblem.rule === 'wythoff' ? ' 或 {"pile": 0, "count": N} 表示两堆同时取N个' : ''}
-不要回复其他内容。`;
+该你出手了。请给出你的选择。
+
+回复JSON格式，不要其他内容：{"pile":堆号(从1开始),"count":取走数量}
+${currentProblem.rule === 'wythoff' ? '两堆同时取用{"pile":0,"count":N}' : ''}`;
 
     try {
         const response = await fetch(AI_WORKER_URL, {
