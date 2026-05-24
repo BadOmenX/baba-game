@@ -110,7 +110,7 @@ async function joinRoom() {
     currentProblem = PROBLEMS.find(p => p.id === room.problem_id);
 
     // 更新房间状态
-    await supabase.from('rooms').update({ status: 'playing' }).eq('room_code', roomCode);
+    await window.supabaseClient.from('rooms').update({ status: 'playing' }).eq('room_code', roomCode);
 
     enterGameRoom(roomCode, currentProblem);
     subscribeToRoom(roomCode);
@@ -123,7 +123,7 @@ async function joinRoom() {
 }
 
 async function subscribeToRoom(roomCode) {
-    channel = supabase.channel(`room:${roomCode}`);
+    channel = window.supabaseClient.channel(`room:${roomCode}`);
 
     channel
         .on('broadcast', { event: 'move' }, (payload) => handleRemoteMove(payload.payload))
@@ -227,7 +227,7 @@ async function makeMove() {
     });
 
     // 保存到数据库
-    await supabase.from('moves').insert({
+    await window.supabaseClient.from('moves').insert({
         room_code: myRoomCode,
         player: `player${myPlayerNumber}`,
         move_data: { pileIndex, count }
@@ -291,7 +291,7 @@ function endGame(winner) {
         payload: { winner }
     });
 
-    supabase.from('rooms').update({ status: 'finished', winner: `player${winner}` }).eq('room_code', myRoomCode);
+    window.supabaseClient.from('rooms').update({ status: 'finished', winner: `player${winner}` }).eq('room_code', myRoomCode);
 }
 
 // ==================== 计时器 ====================
