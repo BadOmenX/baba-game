@@ -1,4 +1,6 @@
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// 初始化 Supabase 客户端
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 // ==================== 全局状态 ====================
 let currentPage = 'home';
 let myPlayerNumber = null;
@@ -23,7 +25,9 @@ function switchPage(page) {
 }
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
-    btn.addEventListener('click', () => switchPage(btn.dataset.page));
+    btn.addEventListener('click', function() {
+        switchPage(this.getAttribute('data-page'));
+    });
 });
 
 // ==================== 题库渲染 ====================
@@ -60,7 +64,7 @@ async function createRoom() {
     const problem = PROBLEMS.find(p => p.id === problemId);
     const roomCode = generateRoomCode();
 
-    const { error } = await supabase
+    const { error } = await supabaseClient
         .from('rooms')
         .insert({
             room_code: roomCode,
@@ -90,7 +94,7 @@ async function joinRoom() {
     const roomCode = document.getElementById('room-code-input').value.toUpperCase();
     if (!roomCode) return alert('请输入房间号');
 
-    const { data: room, error } = await supabase
+    const { data: room, error } = await supabaseClient
         .from('rooms')
         .select('*')
         .eq('room_code', roomCode)
@@ -110,13 +114,11 @@ async function joinRoom() {
     myPlayerNumber = 2;
     currentProblem = PROBLEMS.find(p => p.id === room.problem_id);
 
-    // 更新房间状态
-    await supabase.from('rooms').update({ status: 'playing' }).eq('room_code', roomCode);
+    await supabaseClient.from('rooms').update({ status: 'playing' }).eq('room_code', roomCode);
 
     enterGameRoom(roomCode, currentProblem);
     subscribeToRoom(roomCode);
 
-    // 通知对方游戏开始
     await channel.send({
         type: 'game_start',
         problem: currentProblem
@@ -124,7 +126,7 @@ async function joinRoom() {
 }
 
 async function subscribeToRoom(roomCode) {
-    channel = supabase.channel(`room:${roomCode}`);
+    channel = supabaseClient.channel(`room:${roomCode}`);
 
     channel
         .on('broadcast', { event: 'move' }, (payload) => handleRemoteMove(payload.payload))
@@ -217,7 +219,6 @@ async function makeMove() {
     gameEngine.makeMove(pileIndex, count);
     addLog(`玩家${myPlayerNumber} 从第${pileIndex + 1}堆取走${count}个石子`);
 
-    // 广播操作给对手
     await channel.send({
         type: 'move',
         payload: {
@@ -227,8 +228,7 @@ async function makeMove() {
         }
     });
 
-    // 保存到数据库
-    await supabase.from('moves').insert({
+    await supabaseClient.from('moves').insert({
         room_code: myRoomCode,
         player: `player${myPlayerNumber}`,
         move_data: { pileIndex, count }
@@ -292,7 +292,7 @@ function endGame(winner) {
         payload: { winner }
     });
 
-    supabase.from('rooms').update({ status: 'finished', winner: `player${winner}` }).eq('room_code', myRoomCode);
+    supabaseClient.from('rooms').update({ status: 'finished', winner: `player${winner}` }).eq('room_code', myRoomCode);
 }
 
 // ==================== 计时器 ====================
