@@ -109,26 +109,45 @@ function resetDiffButtons() {
 function randomStones() {
     const problem = PROBLEMS.find(p => p.id === selectedRule);
     if (!problem) return;
+    const input = document.getElementById('custom-stones');
     if (problem.rule === 'bash') {
-        document.getElementById('custom-stones').value = Math.floor(Math.random() * 40) + 10;
+        input.value = Math.floor(Math.random() * 40) + 10;
     } else if (problem.rule === 'nim') {
-        document.getElementById('custom-stones').value = Math.floor(Math.random() * 8) + 3;
+        const piles = Math.floor(Math.random() * 4) + 2;
+        input.value = piles;
+    } else if (problem.rule === 'wythoff') {
+        const a = Math.floor(Math.random() * 15) + 3;
+        const b = Math.floor(Math.random() * 15) + 3;
+        input.value = a + ',' + b;
     }
 }
 
 function getCustomPiles() {
-    const val = document.getElementById('custom-stones').value;
+    const val = document.getElementById('custom-stones').value.trim();
     if (!val) return null;
     const problem = PROBLEMS.find(p => p.id === selectedRule);
     if (problem.rule === 'bash') {
-        return [parseInt(val)];
+        const n = parseInt(val);
+        if (isNaN(n) || n < 1) return null;
+        return [n];
     } else if (problem.rule === 'nim') {
         const n = parseInt(val);
+        if (isNaN(n) || n < 2) return null;
         const piles = [];
         for (let i = 0; i < n; i++) {
             piles.push(Math.floor(Math.random() * 10) + 1);
         }
         return piles;
+    } else if (problem.rule === 'wythoff') {
+        const parts = val.split(',').map(s => parseInt(s.trim()));
+        if (parts.length === 1) {
+            const n = parts[0];
+            if (isNaN(n) || n < 1) return null;
+            return [n, Math.floor(Math.random() * 10) + 3];
+        }
+        if (parts.length !== 2) return null;
+        if (isNaN(parts[0]) || isNaN(parts[1]) || parts[0] < 1 || parts[1] < 1) return null;
+        return [parts[0], parts[1]];
     }
     return null;
 }

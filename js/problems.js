@@ -10,20 +10,7 @@ const PROBLEMS = [
         rule: 'bash',
         timeLimit: 30,
         boardType: 'single-row',
-        ai: { style: 'aggressive', hint: '能多拿就多拿' }
-    },
-    {
-        id: 'bash-custom',
-        name: '巴什博弈·自定义',
-        icon: '🪨',
-        description: '自定义石子总数和每次最大取子数。',
-        difficulty: 'medium',
-        defaultPiles: [30],
-        maxTake: 5,
-        rule: 'bash',
-        timeLimit: 45,
-        boardType: 'single-row',
-        ai: { style: 'tricky', hint: '时而激进时而保守' },
+        ai: { style: 'aggressive' },
         customizable: true
     },
     {
@@ -37,33 +24,8 @@ const PROBLEMS = [
         rule: 'nim',
         timeLimit: 45,
         boardType: 'multi-pile',
-        ai: { style: 'destroyer', hint: '优先清空大堆' }
-    },
-    {
-        id: 'nim-lite',
-        name: 'Nim 简化版',
-        icon: '🎯',
-        description: '两堆石子，每堆5个。入门级Nim游戏。',
-        difficulty: 'easy',
-        defaultPiles: [5, 5],
-        maxTake: null,
-        rule: 'nim',
-        timeLimit: 30,
-        boardType: 'multi-pile',
-        ai: { style: 'copycat', hint: '模仿你的操作' }
-    },
-    {
-        id: 'nim-hard',
-        name: 'Nim 挑战',
-        icon: '💀',
-        description: '四堆石子：1,3,5,7。经典必败局面！',
-        difficulty: 'hard',
-        defaultPiles: [1, 3, 5, 7],
-        maxTake: null,
-        rule: 'nim',
-        timeLimit: 60,
-        boardType: 'multi-pile',
-        ai: { style: 'destroyer', hint: '优先清空大堆' }
+        ai: { style: 'destroyer' },
+        customizable: true
     },
     {
         id: 'wythoff',
@@ -76,6 +38,7 @@ const PROBLEMS = [
         rule: 'wythoff',
         timeLimit: 45,
         boardType: 'wythoff',
-        ai: { style: 'balancer', hint: '试图让两堆数量接近' }
+        ai: { style: 'balancer' },
+        customizable: true
     }
 ];
