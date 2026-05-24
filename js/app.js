@@ -1,6 +1,9 @@
 // 初始化 Supabase 客户端
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Cloudflare Worker AI 地址
+const AI_WORKER_URL = 'https://green-river-5b45.2560349809.workers.dev/';
+
 // ==================== 全局状态 ====================
 let currentPage = 'home';
 let myPlayerNumber = null;
@@ -210,7 +213,7 @@ function getNimBestMove() {
     return null;
 }
 
-function aiMove() {
+async function aiMove() {
     if (gameEngine.currentPlayer !== 2) return;
 
     const nonEmptyPiles = [];
@@ -219,94 +222,114 @@ function aiMove() {
     });
     if (nonEmptyPiles.length === 0) return;
 
-    const aiConfig = currentProblem.ai || { style: 'human' };
-    let pileIndex, count;
-    let bestMove = null;
-
-    if (currentProblem.rule === 'bash') {
-        bestMove = getBashBestMove();
-    } else if (currentProblem.rule === 'nim') {
-        bestMove = getNimBestMove();
-    }
-
-    const roll = Math.random();
-
-    if (bestMove && roll < 0.7) {
-        pileIndex = bestMove.pileIndex;
-        count = bestMove.count;
-    } else if (bestMove && roll < 0.9) {
-        pileIndex = bestMove.pileIndex;
-        const maxT = getMaxTake(pileIndex);
-        do {
-            count = Math.floor(Math.random() * maxT) + 1;
-        } while (count === bestMove.count && maxT > 1);
-    } else {
-        switch (aiConfig.style) {
-            case 'aggressive':
-                pileIndex = getMaxPileIndex();
-                count = getMaxTake(pileIndex);
-                break;
-            case 'destroyer':
-                pileIndex = getMaxPileIndex();
-                if (Math.random() < 0.5) count = gameEngine.piles[pileIndex];
-                else count = Math.floor(gameEngine.piles[pileIndex] / 2) + 1;
-                break;
-            case 'balancer':
-                if (gameEngine.piles.length >= 2) {
-                    const diff = Math.abs(gameEngine.piles[0] - gameEngine.piles[1]);
-                    pileIndex = gameEngine.piles[0] > gameEngine.piles[1] ? 0 : 1;
-                    count = Math.max(1, Math.min(diff, gameEngine.piles[pileIndex]));
-                } else {
-                    pileIndex = getMaxPileIndex();
-                    count = Math.floor(Math.random() * getMaxTake(pileIndex)) + 1;
-                }
-                break;
-            case 'tricky':
-                pileIndex = getMaxPileIndex();
-                const r = Math.random();
-                if (r < 0.4) count = getMaxTake(pileIndex);
-                else if (r < 0.7) count = 1;
-                else count = Math.floor(Math.random() * getMaxTake(pileIndex)) + 1;
-                break;
-            case 'copycat':
-                pileIndex = getMaxPileIndex();
-                count = Math.min(3, getMaxTake(pileIndex));
-                break;
-            case 'cautious':
-                pileIndex = getMaxPileIndex();
-                count = 1;
-                break;
-            default:
-                pileIndex = nonEmptyPiles[Math.floor(Math.random() * nonEmptyPiles.length)];
-                count = Math.floor(Math.random() * getMaxTake(pileIndex)) + 1;
-        }
-    }
-
-    if (pileIndex === undefined || pileIndex < 0) {
-        pileIndex = nonEmptyPiles[0];
-    }
-    count = Math.max(1, Math.min(count, gameEngine.piles[pileIndex]));
-    if (currentProblem.maxTake) count = Math.min(count, currentProblem.maxTake);
-
-    const delay = 600 + Math.random() * 1400;
     document.getElementById('turn-indicator').textContent = '🤖 AI 思考中...';
     document.getElementById('game-controls').innerHTML = '<div class="waiting-overlay">🤖 AI 思考中...</div>';
+
+    let rulesText = '';
+    if (currentProblem.rule === 'bash') {
+        rulesText = `巴什博弈：只有1堆石子，每次取1~${currentProblem.maxTake}个，取走最后一个获胜。`;
+    } else if (currentProblem.rule === 'nim') {
+        rulesText = `Nim游戏：有${gameEngine.piles.length}堆石子，每次从任意一堆取任意数量（至少1个），取走最后一个获胜。`;
+    } else if (currentProblem.rule === 'wythoff') {
+        rulesText = `威佐夫博弈：有2堆石子，每次可以从一堆取任意数量，或从两堆取相同数量，取走最后一个获胜。`;
+    }
+
+    const prompt = `你是一个博弈论高手。现在正在进行${currentProblem.name}。
+
+规则：${rulesText}
+
+当前局面：${gameEngine.piles.map((c, i) => `第${i + 1}堆: ${c}个`).join('，')}
+
+轮到你出手。请选择最优策略。
+请只回复JSON格式：{"pile": 堆号(从1开始), "count": 取走数量}${currentProblem.rule === 'wythoff' ? ' 或 {"pile": 0, "count": N} 表示两堆同时取N个' : ''}
+不要回复其他内容。`;
+
+    try {
+        const response = await fetch(AI_WORKER_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt })
+        });
+
+        const data = await response.json();
+        const content = data.content || '';
+
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('AI返回格式错误');
+
+        const move = JSON.parse(jsonMatch[0]);
+        let pileIndex = move.pile - 1;
+        let count = move.count;
+
+        if (pileIndex === -1 && currentProblem.rule === 'wythoff') {
+            count = Math.max(1, Math.min(count, gameEngine.piles[0], gameEngine.piles[1]));
+        } else {
+            if (pileIndex < 0 || pileIndex >= gameEngine.piles.length) {
+                pileIndex = getMaxPileIndex();
+            }
+            count = Math.max(1, Math.min(count, gameEngine.piles[pileIndex]));
+            if (currentProblem.maxTake) count = Math.min(count, currentProblem.maxTake);
+        }
+
+        setTimeout(() => {
+            if (pileIndex === -1) {
+                gameEngine.piles[0] -= count;
+                gameEngine.piles[1] -= count;
+                gameEngine.moveHistory.push({ player: 2, pileIndex: -1, count, pilesAfter: [...gameEngine.piles] });
+                addLog(`🤖 AI 从两堆同时取走${count}个石子`);
+            } else {
+                gameEngine.makeMove(pileIndex, count);
+                addLog(`🤖 AI 从第${pileIndex + 1}堆取走${count}个石子`);
+            }
+
+            const winner = gameEngine.checkGameOver();
+            if (winner) { endGameSingle(winner); return; }
+
+            gameEngine.switchPlayer();
+            renderBoard();
+            updateTurnDisplaySingle();
+            resetTimer();
+        }, 800);
+
+    } catch (err) {
+        console.error('AI调用失败，使用本地策略:', err);
+        addLog('⚠️ AI 断线，使用本地策略');
+        fallbackAiMove();
+    }
+}
+
+function fallbackAiMove() {
+    const nonEmptyPiles = [];
+    gameEngine.piles.forEach((count, i) => { if (count > 0) nonEmptyPiles.push(i); });
+
+    let pileIndex, count;
+    let bestMove = null;
+    if (currentProblem.rule === 'bash') bestMove = getBashBestMove();
+    else if (currentProblem.rule === 'nim') bestMove = getNimBestMove();
+
+    if (bestMove && Math.random() < 0.8) {
+        pileIndex = bestMove.pileIndex;
+        count = bestMove.count;
+    } else {
+        pileIndex = nonEmptyPiles[Math.floor(Math.random() * nonEmptyPiles.length)];
+        count = Math.floor(Math.random() * getMaxTake(pileIndex)) + 1;
+    }
+
+    count = Math.max(1, Math.min(count, gameEngine.piles[pileIndex]));
+    if (currentProblem.maxTake) count = Math.min(count, currentProblem.maxTake);
 
     setTimeout(() => {
         gameEngine.makeMove(pileIndex, count);
         addLog(`🤖 AI 从第${pileIndex + 1}堆取走${count}个石子`);
 
         const winner = gameEngine.checkGameOver();
-        if (winner) {
-            endGameSingle(winner);
-            return;
-        }
+        if (winner) { endGameSingle(winner); return; }
 
         gameEngine.switchPlayer();
         renderBoard();
         updateTurnDisplaySingle();
         resetTimer();
-    }, delay);
+    }, 800);
 }
 
 function endGameSingle(winner) {
