@@ -234,9 +234,10 @@ async function aiMove() {
         rulesText = `威佐夫博弈：有2堆石子，每次可以从一堆取任意数量，或从两堆取相同数量，取走最后一个获胜。`;
     }
 
-        const prompt = `${currentProblem.name}。${rulesText}
+    const prompt = `${currentProblem.name}。${rulesText}
 当前：${gameEngine.piles.map((c, i) => `第${i + 1}堆${c}个`).join('，')}
-请给出你的选择。只回复{"pile":堆号,"count":数量}${currentProblem.rule === 'wythoff' ? '，两堆同时取用{"pile":0,"count":N}' : ''}`;
+${currentProblem.rule === 'wythoff' ? '你可以从一堆取，或从两堆取相同数量（此时pile填0）。' : ''}
+请给出最优走法。`;
 
     try {
         const response = await fetch(AI_WORKER_URL, {
@@ -464,7 +465,6 @@ function renderControls() {
         return;
     }
 
-    // 巴什博弈自动选中
     if (currentProblem.boardType === 'single-row' && gameEngine.selectedPile === null && gameEngine.piles[0] > 0) {
         gameEngine.selectedPile = 0;
     }
