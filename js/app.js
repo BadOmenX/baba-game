@@ -234,15 +234,19 @@ async function aiMove() {
         rulesText = `威佐夫博弈：有2堆石子，每次可以从一堆取任意数量，或从两堆取相同数量，取走最后一个获胜。`;
     }
 
-    const prompt = `你正在和人类玩${currentProblem.name}。
+        const prompt = `你正在和人类玩${currentProblem.name}。
 
 规则：${rulesText}
 
 当前局面：${gameEngine.piles.map((c, i) => `第${i + 1}堆: ${c}个`).join('，')}
 
-该你出手了。请给出你的选择。
+该你出手了。
 
-回复JSON格式，不要其他内容：{"pile":堆号(从1开始),"count":取走数量}
+先一句话分析当前局面和你的策略，然后用JSON给出你的选择。
+
+格式：
+分析：（一句话）
+选择：{"pile":堆号从1开始,"count":取走数量}
 ${currentProblem.rule === 'wythoff' ? '两堆同时取用{"pile":0,"count":N}' : ''}`;
 
     try {
@@ -253,9 +257,17 @@ ${currentProblem.rule === 'wythoff' ? '两堆同时取用{"pile":0,"count":N}' :
         });
 
         const data = await response.json();
-        const content = data.content || '';
+                const content = data.content || '';
+        console.log('AI思考:', content);
 
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        // 提取分析部分
+        const analysisMatch = content.match(/分析[：:]\s*(.+)/);
+        if (analysisMatch) {
+            addLog(`💭 AI分析: ${analysisMatch[1]}`);
+        }
+
+        // 提取JSON
+        const jsonMatch = content.match(/\{[\s\S]*?\}/);
         if (!jsonMatch) throw new Error('AI返回格式错误');
 
         const move = JSON.parse(jsonMatch[0]);
