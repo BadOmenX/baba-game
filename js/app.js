@@ -1,3 +1,4 @@
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ==================== 全局状态 ====================
 let currentPage = 'home';
 let myPlayerNumber = null;
@@ -110,7 +111,7 @@ async function joinRoom() {
     currentProblem = PROBLEMS.find(p => p.id === room.problem_id);
 
     // 更新房间状态
-    await window.supabaseClient.from('rooms').update({ status: 'playing' }).eq('room_code', roomCode);
+    await supabase.from('rooms').update({ status: 'playing' }).eq('room_code', roomCode);
 
     enterGameRoom(roomCode, currentProblem);
     subscribeToRoom(roomCode);
@@ -123,7 +124,7 @@ async function joinRoom() {
 }
 
 async function subscribeToRoom(roomCode) {
-    channel = window.supabaseClient.channel(`room:${roomCode}`);
+    channel = supabase.channel(`room:${roomCode}`);
 
     channel
         .on('broadcast', { event: 'move' }, (payload) => handleRemoteMove(payload.payload))
@@ -227,7 +228,7 @@ async function makeMove() {
     });
 
     // 保存到数据库
-    await window.supabaseClient.from('moves').insert({
+    await supabase.from('moves').insert({
         room_code: myRoomCode,
         player: `player${myPlayerNumber}`,
         move_data: { pileIndex, count }
@@ -291,7 +292,7 @@ function endGame(winner) {
         payload: { winner }
     });
 
-    window.supabaseClient.from('rooms').update({ status: 'finished', winner: `player${winner}` }).eq('room_code', myRoomCode);
+    supabase.from('rooms').update({ status: 'finished', winner: `player${winner}` }).eq('room_code', myRoomCode);
 }
 
 // ==================== 计时器 ====================
