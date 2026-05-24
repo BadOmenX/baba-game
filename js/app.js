@@ -250,12 +250,19 @@ async function aiMove() {
 ${currentProblem.rule === 'wythoff' ? '两堆同时取用{"pile":0,"count":N}' : ''}`;
 
     try {
+        
         const response = await fetch(AI_WORKER_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt })
         });
-
+        console.log('AI Worker 状态:', response.status);
+        
+        const data = await response.json();
+        console.log('AI 原始返回:', JSON.stringify(data));
+        
+        const content = data.content || '';
+        console.log('AI 回复内容:', content);
         const data = await response.json();
                 const content = data.content || '';
         console.log('AI思考:', content);
