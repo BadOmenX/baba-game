@@ -290,11 +290,11 @@ async function aiMove() {
 
     // 简单模式：80%概率用本地策略
     if (selectedDifficulty === 'easy') {
-        if (Math.random() < 0.8) { fallbackAiMove(); return; }
+        if (Math.random() < 0.5) { fallbackAiMove(); return; }
     }
     // 中等模式：50%概率用本地策略
     if (selectedDifficulty === 'medium') {
-        if (Math.random() < 0.5) { fallbackAiMove(); return; }
+        if (Math.random() < 0.3) { fallbackAiMove(); return; }
     }
     // 困难模式：始终用AI
 
@@ -308,8 +308,9 @@ async function aiMove() {
     }
 
         const prompt = `${currentProblem.name}。${rulesText}
-局面：${gameEngine.piles.map((c, i) => `堆${i + 1}=${c}`).join('，')}
-${currentProblem.rule === 'wythoff' ? '可两堆同取(pile=0)。' : ''}选最优。`;
+当前：${gameEngine.piles.map((c, i) => `堆${i+1}=${c}`).join('，')}
+${currentProblem.rule === 'wythoff' ? '可两堆同取pile=0。' : ''}
+输出JSON。`;
 
     try {
         const response = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
@@ -320,8 +321,8 @@ ${currentProblem.rule === 'wythoff' ? '可两堆同取(pile=0)。' : ''}选最�
         const analysisMatch = content.match(/分析[：:]\s*(.+)/);
         if (analysisMatch) addLog(`💭 AI: ${analysisMatch[1]}`);
 
-        const jsonMatch = content.match(/\{[\s\S]*?\}/);
-        if (!jsonMatch) throw new Error('格式错误');
+        const jsonMatch = content.match(/\{[^}]+\}/);
+        if (!jsonMatch) throw new Error('格式错误: ' + content);
 
         const move = JSON.parse(jsonMatch[0]);
         let pileIndex = move.pile - 1;
