@@ -107,21 +107,29 @@ function selectDifficulty(diff) {
 function resetDiffButtons() {
     document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
 }
-
 function randomStones() {
     const problem = PROBLEMS.find(p => p.id === selectedRule);
     if (!problem) return;
     const input = document.getElementById('custom-stones');
     if (problem.rule === 'bash') {
         input.value = Math.floor(Math.random() * 40) + 10;
-    } else if (problem.rule === 'nim') {
-        const piles = Math.floor(Math.random() * 4) + 2;
-        input.value = piles;
+    } else if (problem.rule === 'nim' || problem.rule === 'decreasing') {
+        input.value = Math.floor(Math.random() * 4) + 2;
+    } else if (problem.rule === 'fragmented-nim') {
+        input.value = Math.floor(Math.random() * 3) + 2;
     } else if (problem.rule === 'wythoff') {
-        const a = Math.floor(Math.random() * 15) + 3;
-        const b = Math.floor(Math.random() * 15) + 3;
-        input.value = a + ', ' + b;
+        input.value = (Math.floor(Math.random() * 15) + 3) + ', ' + (Math.floor(Math.random() * 15) + 3);
         input.placeholder = '例如: 6, 10';
+    } else if (problem.rule === 'euclid') {
+        input.value = (Math.floor(Math.random() * 50) + 10) + ', ' + (Math.floor(Math.random() * 20) + 3);
+        input.placeholder = '例如: 25, 7';
+    } else if (problem.rule === 'letter-picking') {
+        const chars = 'ABCDEFGH';
+        const len = Math.floor(Math.random() * 4) + 4;
+        let word = '';
+        for (let i = 0; i < len * 2; i++) word += chars[Math.floor(Math.random() * chars.length)];
+        input.value = word;
+        input.placeholder = '偶数长度字符串';
     }
 }
 
@@ -135,7 +143,7 @@ function getCustomPiles() {
         const n = parseInt(val);
         if (isNaN(n) || n < 1) return null;
         return [n];
-    } else if (problem.rule === 'nim') {
+    } else if (problem.rule === 'nim' || problem.rule === 'decreasing' || problem.rule === 'fragmented-nim') {
         const n = parseInt(val);
         if (isNaN(n) || n < 2) return null;
         const piles = [];
@@ -143,11 +151,18 @@ function getCustomPiles() {
             piles.push(Math.floor(Math.random() * 10) + 1);
         }
         return piles;
-    } else if (problem.rule === 'wythoff') {
+    } else if (problem.rule === 'wythoff' || problem.rule === 'euclid') {
         const parts = val.split(',').map(s => parseInt(s.trim()));
         if (parts.length !== 2) return null;
         if (isNaN(parts[0]) || isNaN(parts[1]) || parts[0] < 1 || parts[1] < 1) return null;
-        return [parts[0], parts[1]];
+        return [Math.max(parts[0], parts[1]), Math.min(parts[0], parts[1])];
+    } else if (problem.rule === 'letter-picking') {
+        // 随机生成字符串
+        const chars = 'ABCDEFGH';
+        const len = parseInt(val) || 6;
+        let word = '';
+        for (let i = 0; i < len; i++) word += chars[Math.floor(Math.random() * chars.length)];
+        return word;
     }
     return null;
 }
@@ -245,6 +260,11 @@ async function startSinglePlayer() {
     const problem = PROBLEMS.find(p => p.id === selectedRule);
     customPiles = getCustomPiles();
     const piles = customPiles || [...problem.defaultPiles];
+        // 字符串题目特殊处理
+    if (problem.rule === 'letter-picking') {
+        const word = customPiles || problem.defaultWord || 'ABBAABBA';
+        currentProblem = { ...problem, word, piles: [] };
+    }
     currentProblem = { ...problem, piles };
     myRoomCode = 'single-' + Date.now();
     myPlayerNumber = 1;
@@ -488,6 +508,28 @@ function renderBoard() {
                 <div style="text-align:center;margin-top:12px;">
                     <button class="btn-secondary btn-sm" onclick="selectBothPiles()">🎯 从两堆同时取（相同数量）</button>
                 </div>`;
+            break;
+                case 'euclid':
+            board.innerHTML = `
+                <div class="board-row">
+                    ${piles.map((count, i) => `
+                        <div class="pile">
+                            <div class="pile-label">${i === 0 ? '较大数' : '较小数'}</div>
+                            <div class="pile-count" style="font-size:36px;">${count}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            break;
+
+        case 'text':
+            const word = currentProblem.word || 'ABBAABBA';
+            board.innerHTML = `
+                <div class="bash-row">
+                    <div class="bash-label">字符串：<strong style="font-size:24px;letter-spacing:8px;">${word}</strong></div>
+                    <div style="margin-top:12px;color:#94a3b8;">玩家1序列：<span id="seq1">-</span> | 玩家2序列：<span id="seq2">-</span></div>
+                </div>
+            `;
             break;
         default:
             board.innerHTML = `
