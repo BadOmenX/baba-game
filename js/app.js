@@ -100,16 +100,15 @@ async function createRoom() {
 
     alert(`房间创建成功！\n房间号: ${roomCode}\n\n请把房间号发给对手加入。`);
 
-    // 监听房间状态变化
-    subscribeToRoom(roomCode);
-
-    // 监听对手加入
+    // 监听对手加入 → 开始游戏
     supabaseClient
         .channel(`room-join:${roomCode}`)
         .on('broadcast', { event: 'player_joined' }, (payload) => {
             document.getElementById('name-p2').textContent = '玩家2';
+            subscribeToRoom(roomCode);
             enterGameRoom(roomCode, currentProblem);
-            alert('对手已加入！游戏开始！');
+            addLog('对手已加入！游戏开始！');
+            document.getElementById('turn-indicator').textContent = '⚡ 轮到你出手！';
         })
         .subscribe();
 }
@@ -138,25 +137,18 @@ async function joinRoom() {
     myPlayerNumber = 2;
     currentProblem = PROBLEMS.find(p => p.id === room.problem_id);
 
-    // 更新房间状态
     await supabaseClient.from('rooms').update({
         status: 'playing',
         player2_name: '玩家2'
     }).eq('room_code', roomCode);
 
-    enterGameRoom(roomCode, currentProblem);
     subscribeToRoom(roomCode);
+    enterGameRoom(roomCode, currentProblem);
 
-    // 通知房主对手已加入
+    // 通知房主对手已加入 → 房主也会开始
     await supabaseClient.channel(`room-join:${roomCode}`).send({
         type: 'player_joined',
         payload: {}
-    });
-
-    // 通知游戏开始
-    await channel.send({
-        type: 'game_start',
-        problem: currentProblem
     });
 }
 
