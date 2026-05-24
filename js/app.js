@@ -307,10 +307,9 @@ async function aiMove() {
         rulesText = `威佐夫博弈：有2堆石子，每次可以从一堆取任意数量，或从两堆取相同数量，取走最后一个获胜。`;
     }
 
-    const prompt = `${currentProblem.name}。${rulesText}
-当前：${gameEngine.piles.map((c, i) => `第${i + 1}堆${c}个`).join('，')}
-${currentProblem.rule === 'wythoff' ? '你可以从一堆取，或从两堆取相同数量（此时pile填0）。' : ''}
-请给出最优走法。`;
+        const prompt = `${currentProblem.name}。${rulesText}
+局面：${gameEngine.piles.map((c, i) => `堆${i + 1}=${c}`).join('，')}
+${currentProblem.rule === 'wythoff' ? '可两堆同取(pile=0)。' : ''}选最优。`;
 
     try {
         const response = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
