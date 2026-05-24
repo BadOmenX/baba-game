@@ -8,7 +8,8 @@ const PROBLEMS = [
         maxTake: 3,
         rule: 'bash',
         timeLimit: 30,
-        n: 20, m: 3
+        n: 20, m: 3,
+        ai: { style: 'aggressive', hint: '能多拿就多拿' }
     },
     {
         id: 'nim',
@@ -19,6 +20,7 @@ const PROBLEMS = [
         maxTake: null,
         rule: 'nim',
         timeLimit: 45,
+        ai: { style: 'destroyer', hint: '优先清空大堆' }
     },
     {
         id: 'nim-lite',
@@ -29,6 +31,7 @@ const PROBLEMS = [
         maxTake: null,
         rule: 'nim',
         timeLimit: 30,
+        ai: { style: 'destroyer', hint: '优先清空大堆' }
     },
     {
         id: 'wythoff',
@@ -39,6 +42,7 @@ const PROBLEMS = [
         maxTake: null,
         rule: 'wythoff',
         timeLimit: 45,
+        ai: { style: 'balancer', hint: '试图让两堆数量接近' }
     },
     {
         id: 'bash-big',
@@ -49,7 +53,8 @@ const PROBLEMS = [
         maxTake: 5,
         rule: 'bash',
         timeLimit: 45,
-        n: 50, m: 5
+        n: 50, m: 5,
+        ai: { style: 'aggressive', hint: '能多拿就多拿' }
     },
     {
         id: 'nim-hard',
@@ -60,5 +65,6 @@ const PROBLEMS = [
         maxTake: null,
         rule: 'nim',
         timeLimit: 60,
+        ai: { style: 'destroyer', hint: '优先清空大堆' }
     }
 ];
