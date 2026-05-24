@@ -161,3 +161,16 @@ footer { text-align: center; padding: 24px; color: #64748b; font-size: 13px; }
     .game-top-bar { flex-direction: column; }
     .player-panel { min-width: 100%; }
 }
+/* 巴什博弈单排石子 */
+.bash-row { text-align: center; padding: 20px; }
+.bash-label { font-size: 18px; margin-bottom: 16px; }
+.bash-stones { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 500px; margin: 0 auto; }
+.stone-big { width: 28px; height: 28px; }
+.stone-gone { opacity: 0.15; }
+
+/* 堆标签 */
+.pile-label { font-size: 13px; color: #94a3b8; margin-bottom: 4px; }
+.pile { flex-direction: column; padding: 16px; }
+
+/* 按钮 */
+.btn-sm { padding: 8px 16px; font-size: 14px; }

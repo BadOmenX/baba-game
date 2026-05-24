@@ -9,7 +9,8 @@ const PROBLEMS = [
         rule: 'bash',
         timeLimit: 30,
         n: 20, m: 3,
-        ai: { style: 'aggressive', hint: '能多拿就多拿' }
+        boardType: 'single-row',
+        ai: { style: 'tricky', hint: '时而激进时而保守' }
     },
     {
         id: 'nim',
@@ -20,6 +21,7 @@ const PROBLEMS = [
         maxTake: null,
         rule: 'nim',
         timeLimit: 45,
+        boardType: 'multi-pile',
         ai: { style: 'destroyer', hint: '优先清空大堆' }
     },
     {
@@ -31,7 +33,8 @@ const PROBLEMS = [
         maxTake: null,
         rule: 'nim',
         timeLimit: 30,
-        ai: { style: 'destroyer', hint: '优先清空大堆' }
+        boardType: 'multi-pile',
+        ai: { style: 'copycat', hint: '模仿你的操作' }
     },
     {
         id: 'wythoff',
@@ -42,6 +45,7 @@ const PROBLEMS = [
         maxTake: null,
         rule: 'wythoff',
         timeLimit: 45,
+        boardType: 'wythoff',
         ai: { style: 'balancer', hint: '试图让两堆数量接近' }
     },
     {
@@ -54,6 +58,7 @@ const PROBLEMS = [
         rule: 'bash',
         timeLimit: 45,
         n: 50, m: 5,
+        boardType: 'single-row',
         ai: { style: 'aggressive', hint: '能多拿就多拿' }
     },
     {
@@ -65,6 +70,7 @@ const PROBLEMS = [
         maxTake: null,
         rule: 'nim',
         timeLimit: 60,
+        boardType: 'multi-pile',
         ai: { style: 'destroyer', hint: '优先清空大堆' }
     }
 ];
