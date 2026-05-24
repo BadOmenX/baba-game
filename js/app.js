@@ -75,6 +75,8 @@ function initBattlePage() {
             <div class="diff diff-${p.difficulty}">${p.difficulty === 'easy' ? '简单' : p.difficulty === 'medium' ? '中等' : '困难'}</div>
         </div>
     `).join('');
+    document.getElementById('custom-stones').placeholder = '默认';
+    document.getElementById('custom-stones').value = '';
 }
 
 function selectRule(ruleId) {
@@ -118,7 +120,8 @@ function randomStones() {
     } else if (problem.rule === 'wythoff') {
         const a = Math.floor(Math.random() * 15) + 3;
         const b = Math.floor(Math.random() * 15) + 3;
-        input.value = a + ',' + b;
+        input.value = a + ', ' + b;
+        input.placeholder = '例如: 6, 10';
     }
 }
 
@@ -126,6 +129,8 @@ function getCustomPiles() {
     const val = document.getElementById('custom-stones').value.trim();
     if (!val) return null;
     const problem = PROBLEMS.find(p => p.id === selectedRule);
+    if (!problem) return null;
+
     if (problem.rule === 'bash') {
         const n = parseInt(val);
         if (isNaN(n) || n < 1) return null;
@@ -140,11 +145,6 @@ function getCustomPiles() {
         return piles;
     } else if (problem.rule === 'wythoff') {
         const parts = val.split(',').map(s => parseInt(s.trim()));
-        if (parts.length === 1) {
-            const n = parts[0];
-            if (isNaN(n) || n < 1) return null;
-            return [n, Math.floor(Math.random() * 10) + 3];
-        }
         if (parts.length !== 2) return null;
         if (isNaN(parts[0]) || isNaN(parts[1]) || parts[0] < 1 || parts[1] < 1) return null;
         return [parts[0], parts[1]];
