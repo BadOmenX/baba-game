@@ -185,7 +185,49 @@ function getMaxTake(pileIndex) {
     if (currentProblem.maxTake) max = Math.min(max, currentProblem.maxTake);
     return max;
 }
+// ========== AI 辅助函数 ==========
+function getMaxPileIndex() {
+    let maxIdx = 0;
+    for (let i = 1; i < gameEngine.piles.length; i++) {
+        if (gameEngine.piles[i] > gameEngine.piles[maxIdx]) maxIdx = i;
+    }
+    return maxIdx;
+}
 
+function getMaxTake(pileIndex) {
+    let max = gameEngine.piles[pileIndex];
+    if (currentProblem.maxTake) max = Math.min(max, currentProblem.maxTake);
+    return max;
+}
+
+// ========== 巴什博弈必败态 ==========
+function getBashBestMove() {
+    const total = gameEngine.piles[0];
+    const m = currentProblem.maxTake;
+    const remainder = total % (m + 1);
+    // 如果 remainder != 0，取 remainder 个就让对手进入必败态
+    if (remainder !== 0 && remainder <= m) {
+        return { pileIndex: 0, count: remainder };
+    }
+    return null; // 已经在必败态
+}
+
+// ========== Nim 博弈必败态 ==========
+function getNimBestMove() {
+    let nimSum = 0;
+    gameEngine.piles.forEach(c => nimSum ^= c);
+    if (nimSum === 0) return null; // 已在必败态
+
+    for (let i = 0; i < gameEngine.piles.length; i++) {
+        const target = gameEngine.piles[i] ^ nimSum;
+        if (target < gameEngine.piles[i]) {
+            return { pileIndex: i, count: gameEngine.piles[i] - target };
+        }
+    }
+    return null;
+}
+
+// ========== AI 主函数 ==========
 function aiMove() {
     if (gameEngine.currentPlayer !== 2) return;
 
@@ -195,64 +237,68 @@ function aiMove() {
     });
     if (nonEmptyPiles.length === 0) return;
 
-    const aiConfig = currentProblem.ai || { style: 'random' };
+    const aiConfig = currentProblem.ai || { style: 'human' };
     let pileIndex, count;
+    let bestMove = null;
 
-    switch (aiConfig.style) {
-        case 'aggressive':
-            pileIndex = getMaxPileIndex();
-            count = getMaxTake(pileIndex);
-            if (Math.random() < 0.3) count = Math.max(1, Math.floor(count / 2));
-            break;
-
-        case 'destroyer':
-            pileIndex = getMaxPileIndex();
-            if (Math.random() < 0.4) {
-                count = gameEngine.piles[pileIndex];
-            } else {
-                count = Math.floor(gameEngine.piles[pileIndex] / 2) + 1;
-            }
-            break;
-
-        case 'balancer':
-            if (gameEngine.piles.length >= 2) {
-                const diff = Math.abs(gameEngine.piles[0] - gameEngine.piles[1]);
-                pileIndex = gameEngine.piles[0] > gameEngine.piles[1] ? 0 : 1;
-                count = diff > 0 ? Math.min(diff, gameEngine.piles[pileIndex]) : 1;
-                if (count === 0) count = 1;
-            } else {
-                pileIndex = getMaxPileIndex();
-                count = getMaxTake(pileIndex);
-            }
-            break;
-
-        case 'tricky':
-            pileIndex = getMaxPileIndex();
-            const r = Math.random();
-            if (r < 0.4) count = getMaxTake(pileIndex);
-            else if (r < 0.7) count = 1;
-            else count = Math.floor(Math.random() * getMaxTake(pileIndex)) + 1;
-            break;
-
-        case 'copycat':
-            pileIndex = getMaxPileIndex();
-            count = Math.min(3, getMaxTake(pileIndex));
-            break;
-
-        case 'cautious':
-            pileIndex = getMaxPileIndex();
-            count = Math.max(1, Math.floor(getMaxTake(pileIndex) / 3));
-            break;
-
-        default:
-            pileIndex = nonEmptyPiles[Math.floor(Math.random() * nonEmptyPiles.length)];
-            count = Math.floor(Math.random() * getMaxTake(pileIndex)) + 1;
+    // 尝试找最优解
+    if (currentProblem.rule === 'bash') {
+        bestMove = getBashBestMove();
+    } else if (currentProblem.rule === 'nim') {
+        bestMove = getNimBestMove();
     }
 
+    // 决策：70% 概率走最优，20% 走次优，10% 失误
+    const roll = Math.random();
+
+    if (bestMove && roll < 0.7) {
+        // 走最优解
+        pileIndex = bestMove.pileIndex;
+        count = bestMove.count;
+    } else if (bestMove && roll < 0.9) {
+        // 走次优：改变拿取数量
+        pileIndex = bestMove.pileIndex;
+        const maxT = getMaxTake(pileIndex);
+        // 随机但避开最优解
+        do {
+            count = Math.floor(Math.random() * maxT) + 1;
+        } while (count === bestMove.count && maxT > 1);
+    } else {
+        // 失误/随意走
+        switch (aiConfig.style) {
+            case 'aggressive':
+                pileIndex = getMaxPileIndex();
+                count = getMaxTake(pileIndex);
+                break;
+            case 'balancer':
+                if (gameEngine.piles.length >= 2) {
+                    const diff = Math.abs(gameEngine.piles[0] - gameEngine.piles[1]);
+                    pileIndex = gameEngine.piles[0] > gameEngine.piles[1] ? 0 : 1;
+                    count = Math.max(1, Math.min(diff, gameEngine.piles[pileIndex]));
+                } else {
+                    pileIndex = getMaxPileIndex();
+                    count = Math.floor(Math.random() * getMaxTake(pileIndex)) + 1;
+                }
+                break;
+            case 'cautious':
+                pileIndex = getMaxPileIndex();
+                count = 1;
+                break;
+            default:
+                pileIndex = nonEmptyPiles[Math.floor(Math.random() * nonEmptyPiles.length)];
+                count = Math.floor(Math.random() * getMaxTake(pileIndex)) + 1;
+        }
+    }
+
+    // 合法性检查
+    if (pileIndex === undefined || pileIndex < 0) {
+        pileIndex = nonEmptyPiles[0];
+    }
     count = Math.max(1, Math.min(count, gameEngine.piles[pileIndex]));
     if (currentProblem.maxTake) count = Math.min(count, currentProblem.maxTake);
 
-    const delay = 500 + Math.random() * 1500;
+    // 延迟执行
+    const delay = 600 + Math.random() * 1400;
     document.getElementById('turn-indicator').textContent = '🤖 AI 思考中...';
     document.getElementById('game-controls').innerHTML = '<div class="waiting-overlay">🤖 AI 思考中...</div>';
 
@@ -272,7 +318,6 @@ function aiMove() {
         resetTimer();
     }, delay);
 }
-
 function endGameSingle(winner) {
     clearInterval(timerInterval);
     const isMeWin = winner === 1;
