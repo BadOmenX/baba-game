@@ -38,7 +38,7 @@
 
         <section id="problems" class="page">
             <h2>📚 博弈论题库</h2>
-            <p style="color:#94a3b8;margin-bottom:8px;">🖱️ 点击「查看原题」跳转洛谷，点击「开始对战」进入游戏</p>
+            <p style="color:#94a3b8;margin-bottom:8px;">点击卡片查看原题，进入对战自动随机生成局面</p>
             <div class="problem-grid" id="problem-grid"></div>
         </section>
 
@@ -66,13 +66,9 @@
                         <div class="config-row" id="custom-config-row">
                             <label id="config-label">自定义配置：</label>
                             <div class="stone-config">
-                                <input type="text" id="custom-stones" placeholder="默认">
+                                <input type="text" id="custom-stones" placeholder="留空则随机">
                                 <button class="btn-secondary btn-sm" onclick="randomStones()">🎲 随机</button>
                             </div>
-                        </div>
-                        <div class="config-row hidden" id="challenge-config-row">
-                            <label>选择局面：</label>
-                            <select id="challenge-select"></select>
                         </div>
                     </div>
                     <div id="multi-config" class="hidden">
