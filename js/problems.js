@@ -1,5 +1,4 @@
 const PROBLEMS = [
-    // ========== 经典基础 ==========
     {
         id: 'bash',
         name: '巴什博弈',
@@ -12,7 +11,10 @@ const PROBLEMS = [
         timeLimit: 30,
         boardType: 'single-row',
         ai: { style: 'aggressive' },
-        customizable: true
+        customizable: true,
+        configLabel: '石子数量',
+        configPlaceholder: '石子数量',
+        link: 'https://www.luogu.com.cn/problem/P2197'
     },
     {
         id: 'nim',
@@ -26,7 +28,10 @@ const PROBLEMS = [
         timeLimit: 45,
         boardType: 'multi-pile',
         ai: { style: 'destroyer' },
-        customizable: true
+        customizable: true,
+        configLabel: '堆数',
+        configPlaceholder: '堆数（随机每堆石子）',
+        link: 'https://www.luogu.com.cn/problem/P2197'
     },
     {
         id: 'wythoff',
@@ -40,10 +45,11 @@ const PROBLEMS = [
         timeLimit: 45,
         boardType: 'wythoff',
         ai: { style: 'balancer' },
-        customizable: true
+        customizable: true,
+        configLabel: '两堆数量（逗号分隔）',
+        configPlaceholder: '如: 6, 10',
+        link: 'https://www.luogu.com.cn/problem/P2252'
     },
-
-    // ========== 新增趣味博弈 ==========
     {
         id: 'euclid',
         name: '欧几里德的游戏',
@@ -56,7 +62,10 @@ const PROBLEMS = [
         timeLimit: 60,
         boardType: 'euclid',
         ai: { style: 'balancer' },
-        customizable: true
+        customizable: true,
+        configLabel: '两个数（逗号分隔）',
+        configPlaceholder: '如: 25, 7',
+        link: 'https://www.luogu.com.cn/problem/P1290'
     },
     {
         id: 'decreasing',
@@ -70,13 +79,16 @@ const PROBLEMS = [
         timeLimit: 45,
         boardType: 'multi-pile',
         ai: { style: 'cautious' },
-        customizable: true
+        customizable: true,
+        configLabel: '堆数（每个数随机）',
+        configPlaceholder: '堆数',
+        link: 'https://www.luogu.com.cn/problem/CF1839E'
     },
     {
         id: 'fragmented-nim',
         name: '碎片化 Nim',
         icon: '🧩',
-        description: '你选堆，对手指定你从哪堆取！颠覆传统Nim规则。',
+        description: '你选堆，对手指定你从哪堆取！当前仅实现普通 Nim 规则。',
         difficulty: 'hard',
         defaultPiles: [3, 5, 7],
         maxTake: null,
@@ -84,7 +96,10 @@ const PROBLEMS = [
         timeLimit: 60,
         boardType: 'multi-pile',
         ai: { style: 'tricky' },
-        customizable: true
+        customizable: true,
+        configLabel: '堆数',
+        configPlaceholder: '堆数',
+        link: 'https://www.luogu.com.cn/problem/CF2181F'
     },
     {
         id: 'letter-picking',
@@ -93,11 +108,15 @@ const PROBLEMS = [
         description: '从字符串两端取字符拼成自己的序列，比字典序大小。',
         difficulty: 'hard',
         defaultPiles: [],
+        defaultWord: 'ABBAABBA',
         maxTake: null,
         rule: 'letter-picking',
         timeLimit: 90,
         boardType: 'text',
-        ai: { style: 'destroyer' },
-        customizable: true
+        ai: { style: 'random' },
+        customizable: true,
+        configLabel: '字符串（偶数长度）',
+        configPlaceholder: '如 ABBA',
+        link: 'https://www.luogu.com.cn/problem/CF1728D'
     }
 ];

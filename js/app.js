@@ -1,10 +1,8 @@
 // 初始化 Supabase 客户端
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// Cloudflare Worker AI 地址
 const AI_WORKER_URL = 'https://green-river-5b45.2560349809.workers.dev/';
 
-// ==================== 全局状态 ====================
+// 全局状态
 let currentPage = 'home';
 let myPlayerNumber = null;
 let myRoomCode = null;
@@ -36,15 +34,15 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     });
 });
 
-// ==================== 题库渲染 ====================
+// ==================== 题库页 ====================
 function renderProblems() {
     const grid = document.getElementById('problem-grid');
     grid.innerHTML = PROBLEMS.map(p => `
-        <div class="problem-card" onclick="window.open('${p.link}', '_blank')">
+        <div class="problem-card">
             <h3>${p.icon} ${p.name}</h3>
             <p>${p.description}</p>
             <span class="diff diff-${p.difficulty}">${p.difficulty === 'easy' ? '简单' : p.difficulty === 'medium' ? '中等' : '困难'}</span>
-            <a href="${p.link}" target="_blank" onclick="event.stopPropagation()" style="display:block;margin-top:8px;color:#3b82f6;font-size:12px;">📋 查看原题 →</a>
+            <a href="${p.link}" target="_blank" style="display:block;margin-top:8px;color:#3b82f6;font-size:12px;">📋 查看原题 →</a>
         </div>
     `).join('');
 }
@@ -66,10 +64,11 @@ function initBattlePage() {
     customPiles = null;
     resetModeButtons();
     resetDiffButtons();
+    document.getElementById('custom-stones').value = '';
+    document.getElementById('config-label').textContent = '自定义配置：';
 
-    // 渲染规则卡片
     const ruleCards = document.getElementById('rule-cards');
-        ruleCards.innerHTML = PROBLEMS.map(p => `
+    ruleCards.innerHTML = PROBLEMS.map(p => `
         <div class="rule-card ${selectedRule === p.id ? 'selected' : ''}" onclick="selectRule('${p.id}')">
             <div class="rule-icon">${p.icon}</div>
             <div class="rule-name">${p.name}</div>
@@ -77,8 +76,6 @@ function initBattlePage() {
             <a href="${p.link}" target="_blank" onclick="event.stopPropagation()" style="display:block;margin-top:6px;color:#3b82f6;font-size:11px;">📋 原题链接</a>
         </div>
     `).join('');
-    document.getElementById('custom-stones').placeholder = '默认';
-    document.getElementById('custom-stones').value = '';
 }
 
 function selectRule(ruleId) {
@@ -86,6 +83,13 @@ function selectRule(ruleId) {
     document.querySelectorAll('.rule-card').forEach(c => c.classList.remove('selected'));
     event.target.closest('.rule-card').classList.add('selected');
     document.getElementById('step-config').classList.remove('hidden');
+    // 更新配置标签
+    const problem = PROBLEMS.find(p => p.id === ruleId);
+    if (problem) {
+        document.getElementById('config-label').textContent = problem.configLabel + '：';
+        document.getElementById('custom-stones').placeholder = problem.configPlaceholder || '默认';
+        document.getElementById('custom-stones').value = '';
+    }
 }
 
 function selectMode(mode) {
@@ -109,32 +113,26 @@ function selectDifficulty(diff) {
 function resetDiffButtons() {
     document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
 }
+
+// ==================== 随机与自定义 ====================
 function randomStones() {
     const problem = PROBLEMS.find(p => p.id === selectedRule);
     if (!problem) return;
     const input = document.getElementById('custom-stones');
     if (problem.rule === 'bash') {
         input.value = Math.floor(Math.random() * 40) + 10;
-        input.placeholder = '石子数量';
-    } else if (problem.rule === 'nim' || problem.rule === 'decreasing') {
+    } else if (problem.rule === 'nim' || problem.rule === 'decreasing' || problem.rule === 'fragmented-nim') {
         input.value = Math.floor(Math.random() * 4) + 2;
-        input.placeholder = '堆数';
-    } else if (problem.rule === 'fragmented-nim') {
-        input.value = Math.floor(Math.random() * 3) + 2;
-        input.placeholder = '堆数';
     } else if (problem.rule === 'wythoff') {
         input.value = (Math.floor(Math.random() * 15) + 3) + ', ' + (Math.floor(Math.random() * 15) + 3);
-        input.placeholder = '例如: 6, 10';
     } else if (problem.rule === 'euclid') {
         input.value = (Math.floor(Math.random() * 50) + 10) + ', ' + (Math.floor(Math.random() * 20) + 3);
-        input.placeholder = '例如: 25, 7';
     } else if (problem.rule === 'letter-picking') {
         const chars = 'ABCDEFGH';
         const len = Math.floor(Math.random() * 3) + 2;
         let word = '';
         for (let i = 0; i < len * 2; i++) word += chars[Math.floor(Math.random() * chars.length)];
         input.value = word;
-        input.placeholder = '偶数长度字符串';
     }
 }
 
@@ -152,22 +150,15 @@ function getCustomPiles() {
         const n = parseInt(val);
         if (isNaN(n) || n < 2) return null;
         const piles = [];
-        for (let i = 0; i < n; i++) {
-            piles.push(Math.floor(Math.random() * 10) + 1);
-        }
+        for (let i = 0; i < n; i++) piles.push(Math.floor(Math.random() * 10) + 1);
         return piles;
     } else if (problem.rule === 'wythoff' || problem.rule === 'euclid') {
         const parts = val.split(',').map(s => parseInt(s.trim()));
-        if (parts.length !== 2) return null;
-        if (isNaN(parts[0]) || isNaN(parts[1]) || parts[0] < 1 || parts[1] < 1) return null;
+        if (parts.length !== 2 || parts.some(isNaN) || parts[0] < 1 || parts[1] < 1) return null;
         return [Math.max(parts[0], parts[1]), Math.min(parts[0], parts[1])];
     } else if (problem.rule === 'letter-picking') {
-        // 随机生成字符串
-        const chars = 'ABCDEFGH';
-        const len = parseInt(val) || 6;
-        let word = '';
-        for (let i = 0; i < len; i++) word += chars[Math.floor(Math.random() * chars.length)];
-        return word;
+        if (val.length % 2 !== 0) return null;
+        return val;
     }
     return null;
 }
@@ -175,96 +166,20 @@ function getCustomPiles() {
 // ==================== 开始游戏 ====================
 function startGame() {
     if (!selectedRule) { alert('请先选择博弈规则！'); return; }
-    currentProblem = PROBLEMS.find(p => p.id === selectedRule);
-
-    // 自定义石子
+    const problem = PROBLEMS.find(p => p.id === selectedRule);
     customPiles = getCustomPiles();
-    if (customPiles) {
-        currentProblem = { ...currentProblem, piles: customPiles };
-    }
 
     if (selectedMode === 'single') {
         startSinglePlayer();
     } else {
-        // 双人模式：显示创建/加入房间
         document.getElementById('step-rule').classList.add('hidden');
         document.getElementById('step-config').classList.add('hidden');
         document.getElementById('multi-config').classList.remove('hidden');
     }
 }
 
-// ==================== 房间管理 ====================
-function generateRoomCode() {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
-
-async function createRoom() {
-    if (!selectedRule) { alert('请先选择博弈规则！'); return; }
-    const problem = PROBLEMS.find(p => p.id === selectedRule);
-    customPiles = getCustomPiles();
-    const piles = customPiles || [...problem.defaultPiles];
-    const roomCode = generateRoomCode();
-
-    const { error } = await supabaseClient.from('rooms').insert({
-        room_code: roomCode, problem_id: selectedRule,
-        game_state: { piles, currentPlayer: 1, moveHistory: [] },
-        current_turn: 'player1', player1_name: '玩家1', player2_name: '等待中...', status: 'waiting',
-    });
-
-    if (error) { alert('创建房间失败: ' + error.message); return; }
-
-    myRoomCode = roomCode; myPlayerNumber = 1;
-    currentProblem = { ...problem, piles };
-
-    document.getElementById('room-lobby').style.display = 'none';
-    document.getElementById('game-room').style.display = 'block';
-    document.getElementById('room-badge').textContent = roomCode;
-    document.getElementById('name-p1').textContent = '你 (玩家1)';
-    document.getElementById('name-p2').textContent = '等待加入...';
-    document.getElementById('game-board').innerHTML = '';
-    document.getElementById('game-controls').innerHTML = '';
-    document.getElementById('turn-indicator').textContent = '等待对手加入...';
-    document.getElementById('timer-p1').textContent = '--';
-    document.getElementById('timer-p2').textContent = '--';
-    document.getElementById('log-list').innerHTML = '';
-
-    alert(`房间创建成功！\n房间号: ${roomCode}\n\n请把房间号发给对手加入。`);
-
-    const checkInterval = setInterval(async () => {
-        const { data: room } = await supabaseClient.from('rooms').select('status, player2_name').eq('room_code', roomCode).single();
-        if (room && room.status === 'playing') {
-            clearInterval(checkInterval);
-            document.getElementById('name-p2').textContent = '玩家2';
-            subscribeToRoom(roomCode);
-            enterGameRoom(roomCode, currentProblem);
-            addLog('对手已加入！游戏开始！');
-            document.getElementById('turn-indicator').textContent = '⚡ 轮到你出手！';
-        }
-    }, 1000);
-}
-
-async function joinRoom() {
-    const roomCode = document.getElementById('room-code-input').value.toUpperCase();
-    if (!roomCode) return alert('请输入房间号');
-
-    const { data: room, error } = await supabaseClient.from('rooms').select('*').eq('room_code', roomCode).single();
-    if (error || !room) { alert('房间不存在！'); return; }
-    if (room.status !== 'waiting') { alert('房间已开始对战！'); return; }
-
-    myRoomCode = roomCode; myPlayerNumber = 2;
-    currentProblem = PROBLEMS.find(p => p.id === room.problem_id);
-    currentProblem = { ...currentProblem, piles: room.game_state.piles };
-
-    await supabaseClient.from('rooms').update({ status: 'playing', player2_name: '玩家2' }).eq('room_code', roomCode);
-    subscribeToRoom(roomCode);
-    enterGameRoom(roomCode, currentProblem);
-}
-
-// ==================== 单人模式 ====================
 async function startSinglePlayer() {
     const problem = PROBLEMS.find(p => p.id === selectedRule);
-    customPiles = getCustomPiles();
-    
     if (problem.rule === 'letter-picking') {
         const word = (typeof customPiles === 'string' && customPiles) || problem.defaultWord || 'ABBAABBA';
         currentProblem = { ...problem, word, piles: [] };
@@ -293,7 +208,7 @@ async function startSinglePlayer() {
     addLog(`【${currentProblem.name}】${selectedDifficulty === 'easy' ? '简单' : selectedDifficulty === 'medium' ? '中等' : '困难'}模式开始！你是先手。`);
 }
 
-// ========== AI ==========
+// ==================== AI 相关 ====================
 function getMaxPileIndex() {
     let maxIdx = 0;
     for (let i = 1; i < gameEngine.piles.length; i++) {
@@ -329,28 +244,28 @@ function getNimBestMove() {
 
 async function aiMove() {
     if (gameEngine.currentPlayer !== 2) return;
-
-    const nonEmptyPiles = [];
-    gameEngine.piles.forEach((count, i) => { if (count > 0) nonEmptyPiles.push(i); });
-    if (nonEmptyPiles.length === 0) return;
-
     document.getElementById('turn-indicator').textContent = '🤖 AI 思考中...';
     document.getElementById('game-controls').innerHTML = '<div class="waiting-overlay">🤖 AI 思考中...</div>';
 
-    // 简单模式：80%概率用本地策略
-    if (selectedDifficulty === 'easy') {
-        if (Math.random() < 0.5) { fallbackAiMove(); return; }
+    // 字符串取牌 AI 特殊处理
+    if (currentProblem.rule === 'letter-picking') {
+        setTimeout(() => {
+            const left = currentProblem.word[0];
+            const right = currentProblem.word[currentProblem.word.length - 1];
+            const side = left > right ? 'left' : (right > left ? 'right' : (Math.random() < 0.5 ? 'left' : 'right'));
+            pickLetter(side);
+        }, 800);
+        return;
     }
-    // 中等模式：50%概率用本地策略
-    if (selectedDifficulty === 'medium') {
-        if (Math.random() < 0.3) { fallbackAiMove(); return; }
-    }
-    // 困难模式：始终用AI
+
+    // 难度降级
+    if (selectedDifficulty === 'easy' && Math.random() < 0.8) { fallbackAiMove(); return; }
+    if (selectedDifficulty === 'medium' && Math.random() < 0.5) { fallbackAiMove(); return; }
 
     let rulesText = '';
-        if (currentProblem.rule === 'bash') {
+    if (currentProblem.rule === 'bash') {
         rulesText = `巴什博弈：只有1堆石子，每次取1~${currentProblem.maxTake}个，取走最后一个获胜。`;
-    } else if (currentProblem.rule === 'nim') {
+    } else if (currentProblem.rule === 'nim' || currentProblem.rule === 'fragmented-nim') {
         rulesText = `Nim游戏：有${gameEngine.piles.length}堆石子，每次从任意一堆取任意数量（至少1个），取走最后一个获胜。`;
     } else if (currentProblem.rule === 'wythoff') {
         rulesText = `威佐夫博弈：有2堆石子，每次可以从一堆取任意数量，或从两堆取相同数量，取走最后一个获胜。`;
@@ -358,15 +273,13 @@ async function aiMove() {
         rulesText = `欧几里得游戏：两个正整数(较大数在前)，每次将较大数减去较小数的任意倍（结果非负），先得到0者胜。`;
     } else if (currentProblem.rule === 'decreasing') {
         rulesText = `递减游戏：多个正整数，每次选一个>1的数减1，无法操作者输。`;
-    } else if (currentProblem.rule === 'fragmented-nim') {
-        rulesText = `碎片化Nim：由对手指定你从哪堆取，你可取任意数量，取走最后一个获胜。`;
-    } else if (currentProblem.rule === 'letter-picking') {
-        rulesText = `字符串取牌：从字符串两端取字符拼序列，最后比较字典序大者胜。`;
     }
 
-        const prompt = `${currentProblem.name}。${rulesText}
+    const prompt = `${currentProblem.name}。${rulesText}
 当前：${gameEngine.piles.map((c, i) => `堆${i+1}=${c}`).join('，')}
 ${currentProblem.rule === 'wythoff' ? '可两堆同取pile=0。' : ''}
+${currentProblem.rule === 'euclid' ? '输出格式：{"pile":1,"count":k} 表示将较大数减去较小数的k倍。' : ''}
+${currentProblem.rule === 'decreasing' ? '输出格式：{"pile":堆号,"count":1}' : ''}
 输出JSON。`;
 
     try {
@@ -374,17 +287,25 @@ ${currentProblem.rule === 'wythoff' ? '可两堆同取pile=0。' : ''}
         const data = await response.json();
         const content = data.content || '';
         console.log('AI:', content);
-
-        const analysisMatch = content.match(/分析[：:]\s*(.+)/);
-        if (analysisMatch) addLog(`💭 AI: ${analysisMatch[1]}`);
-
         const jsonMatch = content.match(/\{[^}]+\}/);
-        if (!jsonMatch) throw new Error('格式错误: ' + content);
-
+        if (!jsonMatch) throw new Error('格式错误');
         const move = JSON.parse(jsonMatch[0]);
         let pileIndex = move.pile - 1;
         let count = move.count;
 
+        if (currentProblem.rule === 'euclid') {
+            const a = gameEngine.piles[0], b = gameEngine.piles[1];
+            count = Math.max(1, Math.min(count, Math.floor(a / b)));
+            executeAiMoveEuclid(count);
+            return;
+        }
+        if (currentProblem.rule === 'decreasing') {
+            if (pileIndex < 0 || pileIndex >= gameEngine.piles.length) pileIndex = getMaxPileIndex();
+            count = 1;
+            executeAiMoveDecrease(pileIndex);
+            return;
+        }
+        // 通用 Nim/Bash/Wythoff
         if (pileIndex === -1 && currentProblem.rule === 'wythoff') {
             count = Math.max(1, Math.min(count, gameEngine.piles[0], gameEngine.piles[1]));
         } else {
@@ -392,7 +313,6 @@ ${currentProblem.rule === 'wythoff' ? '可两堆同取pile=0。' : ''}
             count = Math.max(1, Math.min(count, gameEngine.piles[pileIndex]));
             if (currentProblem.maxTake) count = Math.min(count, currentProblem.maxTake);
         }
-
         executeAiMove(pileIndex, count);
     } catch (err) {
         console.error('AI失败:', err);
@@ -404,8 +324,7 @@ ${currentProblem.rule === 'wythoff' ? '可两堆同取pile=0。' : ''}
 function executeAiMove(pileIndex, count) {
     setTimeout(() => {
         if (pileIndex === -1) {
-            gameEngine.piles[0] -= count;
-            gameEngine.piles[1] -= count;
+            gameEngine.piles[0] -= count; gameEngine.piles[1] -= count;
             gameEngine.moveHistory.push({ player: 2, pileIndex: -1, count, pilesAfter: [...gameEngine.piles] });
             addLog(`🤖 AI 从两堆同时取走${count}个石子`);
         } else {
@@ -416,14 +335,49 @@ function executeAiMove(pileIndex, count) {
     }, 800);
 }
 
+function executeAiMoveEuclid(k) {
+    setTimeout(() => {
+        const a = gameEngine.piles[0], b = gameEngine.piles[1];
+        gameEngine.piles[0] = a - k * b;
+        gameEngine.moveHistory.push({ player: 2, pileIndex: 0, count: k, pilesAfter: [...gameEngine.piles] });
+        addLog(`🤖 AI 将较大数减去${k}倍较小数`);
+        if (gameEngine.piles[0] < gameEngine.piles[1]) [gameEngine.piles[0], gameEngine.piles[1]] = [gameEngine.piles[1], gameEngine.piles[0]];
+        afterMove();
+    }, 800);
+}
+
+function executeAiMoveDecrease(idx) {
+    setTimeout(() => {
+        gameEngine.piles[idx]--;
+        gameEngine.moveHistory.push({ player: 2, pileIndex: idx, count: 1, pilesAfter: [...gameEngine.piles] });
+        addLog(`🤖 AI 把第${idx + 1}个数减1`);
+        afterMove();
+    }, 800);
+}
+
 function fallbackAiMove() {
     const nonEmptyPiles = [];
     gameEngine.piles.forEach((count, i) => { if (count > 0) nonEmptyPiles.push(i); });
+    if (currentProblem.rule === 'decreasing') {
+        const candidates = [];
+        gameEngine.piles.forEach((v, i) => { if (v > 1) candidates.push(i); });
+        if (candidates.length > 0) {
+            const idx = candidates[Math.floor(Math.random() * candidates.length)];
+            executeAiMoveDecrease(idx);
+        }
+        return;
+    }
+    if (currentProblem.rule === 'euclid') {
+        const a = gameEngine.piles[0], b = gameEngine.piles[1];
+        const maxK = Math.floor(a / b);
+        const k = Math.floor(Math.random() * maxK) + 1;
+        executeAiMoveEuclid(k);
+        return;
+    }
     let pileIndex, count;
     let bestMove = null;
     if (currentProblem.rule === 'bash') bestMove = getBashBestMove();
-    else if (currentProblem.rule === 'nim') bestMove = getNimBestMove();
-
+    else if (currentProblem.rule === 'nim' || currentProblem.rule === 'fragmented-nim') bestMove = getNimBestMove();
     if (bestMove && Math.random() < 0.8) {
         pileIndex = bestMove.pileIndex;
         count = bestMove.count;
@@ -438,11 +392,13 @@ function fallbackAiMove() {
 
 function afterMove() {
     const winner = gameEngine.checkGameOver();
+    if (winner === 0) { endLetterGame(); return; }
     if (winner) { endGameSingle(winner); return; }
     gameEngine.switchPlayer();
     renderBoard();
     updateTurnDisplaySingle();
     resetTimer();
+    if (gameEngine.currentPlayer === 2) aiMove();
 }
 
 function endGameSingle(winner) {
@@ -453,8 +409,7 @@ function endGameSingle(winner) {
         <div style="text-align:center;padding:20px;">
             <h2>${isMeWin ? '🎉 恭喜获胜！' : '😢 败北！'}</h2>
             <button class="btn-primary" onclick="location.reload()">🔄 再来一局</button>
-        </div>
-    `;
+        </div>`;
 }
 
 // ==================== 认输 ====================
@@ -470,17 +425,79 @@ function surrender() {
     }
 }
 
-// ==================== Realtime ====================
-async function subscribeToRoom(roomCode) {
-    channel = supabaseClient.channel(`room:${roomCode}`);
-    channel
-        .on('broadcast', { event: 'move' }, (payload) => handleRemoteMove(payload.payload))
-        .on('broadcast', { event: 'game_start' }, (payload) => handleGameStart(payload.payload))
-        .on('broadcast', { event: 'game_over' }, (payload) => handleGameOver(payload.payload))
-        .subscribe();
+// ==================== 联机房间（双人） ====================
+async function createRoom() {
+    if (!selectedRule) { alert('请先选择博弈规则！'); return; }
+    const problem = PROBLEMS.find(p => p.id === selectedRule);
+    customPiles = getCustomPiles();
+    const piles = customPiles || [...problem.defaultPiles];
+    const roomCode = generateRoomCode();
+    const { error } = await supabaseClient.from('rooms').insert({
+        room_code: roomCode, problem_id: selectedRule,
+        game_state: { piles, currentPlayer: 1, moveHistory: [] },
+        current_turn: 'player1', player1_name: '玩家1', player2_name: '等待中...', status: 'waiting',
+    });
+    if (error) { alert('创建房间失败: ' + error.message); return; }
+    myRoomCode = roomCode; myPlayerNumber = 1;
+    currentProblem = { ...problem, piles };
+    showWaitingRoom(roomCode);
+    alert(`房间创建成功！\n房间号: ${roomCode}\n\n请把房间号发给对手加入。`);
+    pollForOpponent(roomCode);
 }
 
-// ==================== 游戏房间 ====================
+async function joinRoom() {
+    const roomCode = document.getElementById('room-code-input').value.toUpperCase();
+    if (!roomCode) return alert('请输入房间号');
+    const { data: room, error } = await supabaseClient.from('rooms').select('*').eq('room_code', roomCode).single();
+    if (error || !room) { alert('房间不存在！'); return; }
+    if (room.status !== 'waiting') { alert('房间已开始对战！'); return; }
+    myRoomCode = roomCode; myPlayerNumber = 2;
+    currentProblem = PROBLEMS.find(p => p.id === room.problem_id);
+    currentProblem = { ...currentProblem, piles: room.game_state.piles };
+    await supabaseClient.from('rooms').update({ status: 'playing', player2_name: '玩家2' }).eq('room_code', roomCode);
+    subscribeToRoom(roomCode);
+    enterGameRoom(roomCode, currentProblem);
+}
+
+function showWaitingRoom(roomCode) {
+    document.getElementById('room-lobby').style.display = 'none';
+    document.getElementById('game-room').style.display = 'block';
+    document.getElementById('room-badge').textContent = roomCode;
+    document.getElementById('name-p1').textContent = '你 (玩家1)';
+    document.getElementById('name-p2').textContent = '等待加入...';
+    document.getElementById('game-board').innerHTML = '';
+    document.getElementById('game-controls').innerHTML = '';
+    document.getElementById('turn-indicator').textContent = '等待对手加入...';
+    document.getElementById('timer-p1').textContent = '--';
+    document.getElementById('timer-p2').textContent = '--';
+    document.getElementById('log-list').innerHTML = '';
+}
+
+function pollForOpponent(roomCode) {
+    const checkInterval = setInterval(async () => {
+        const { data: room } = await supabaseClient.from('rooms').select('status, player2_name').eq('room_code', roomCode).single();
+        if (room && room.status === 'playing') {
+            clearInterval(checkInterval);
+            document.getElementById('name-p2').textContent = '玩家2';
+            subscribeToRoom(roomCode);
+            enterGameRoom(roomCode, currentProblem);
+            addLog('对手已加入！游戏开始！');
+            document.getElementById('turn-indicator').textContent = '⚡ 轮到你出手！';
+        }
+    }, 1000);
+}
+
+async function subscribeToRoom(roomCode) {
+    channel = supabaseClient.channel(`room:${roomCode}`);
+    channel.on('broadcast', { event: 'move' }, (payload) => handleRemoteMove(payload.payload))
+           .on('broadcast', { event: 'game_over' }, (payload) => endGame(payload.winner))
+           .subscribe();
+}
+
+function generateRoomCode() {
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
 function enterGameRoom(roomCode, problem) {
     document.getElementById('room-lobby').style.display = 'none';
     document.getElementById('game-room').style.display = 'block';
@@ -493,300 +510,19 @@ function enterGameRoom(roomCode, problem) {
     startTimer();
 }
 
-function renderBoard() {
-    const board = document.getElementById('game-board');
-    const boardType = currentProblem.boardType || 'multi-pile';
-    const piles = gameEngine.piles;
-
-    switch (boardType) {
-        case 'single-row':
-            const total = piles[0];
-            let stoneSize = 28;
-            if (total > 30) stoneSize = 20;
-            if (total > 50) stoneSize = 16;
-            if (total > 80) stoneSize = 12;
-            board.innerHTML = `
-                <div class="bash-row">
-                    <div class="bash-label">石子总数：<strong>${total}</strong></div>
-                    <div class="bash-stones" style="max-width:100%;flex-wrap:wrap;gap:4px;">
-                        ${Array(total).fill(0).map(() => `<div class="stone" style="width:${stoneSize}px;height:${stoneSize}px;flex-shrink:0;"></div>`).join('')}
-                    </div>
-                </div>`;
-            break;
-        case 'wythoff':
-            board.innerHTML = `
-                <div class="board-row">
-                    ${piles.map((count, i) => `
-                        <div class="pile ${gameEngine.selectedPile === i ? 'selected' : ''}" onclick="selectPile(${i})">
-                            <div class="pile-label">第${i + 1}堆</div>
-                            <div class="pile-stones">${Array(Math.min(count, 20)).fill(0).map(() => '<div class="stone"></div>').join('')}${count > 20 ? `<div style="font-size:12px;color:#94a3b8;">+${count - 20}</div>` : ''}</div>
-                            <div class="pile-count">${count}</div>
-                        </div>`).join('')}
-                </div>
-                <div style="text-align:center;margin-top:12px;">
-                    <button class="btn-secondary btn-sm" onclick="selectBothPiles()">🎯 从两堆同时取（相同数量）</button>
-                </div>`;
-            break;
-                case 'euclid':
-            board.innerHTML = `
-                <div class="board-row">
-                    ${piles.map((count, i) => `
-                        <div class="pile">
-                            <div class="pile-label">${i === 0 ? '较大数' : '较小数'}</div>
-                            <div class="pile-count" style="font-size:36px;">${count}</div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-            break;
-
-        case 'text':
-            const word = currentProblem.word || 'ABBAABBA';
-            board.innerHTML = `
-                <div class="bash-row">
-                    <div class="bash-label">📝 字符串：<strong style="font-size:28px;letter-spacing:6px;">${word}</strong></div>
-                    <div style="margin-top:16px;display:flex;justify-content:center;gap:40px;">
-                        <div>🔴 玩家1：<strong id="seq1">-</strong></div>
-                        <div>🔵 玩家2：<strong id="seq2">-</strong></div>
-                    </div>
-                </div>
-            `;
-            break;
-        case 'multi-pile':
-        default:
-            if (!piles || piles.length === 0) {
-                board.innerHTML = '<div class="bash-row"><div class="bash-label">等待游戏开始...</div></div>';
-                break;
-            }
-            board.innerHTML = `
-                <div class="board-row">
-                    ${piles.map((count, i) => `
-                        <div class="pile ${gameEngine.selectedPile === i ? 'selected' : ''}" onclick="selectPile(${i})">
-                            <div class="pile-label">第${i + 1}堆</div>
-                            <div class="pile-stones">${Array(Math.min(count, 15)).fill(0).map(() => '<div class="stone"></div>').join('')}${count > 15 ? `<div style="font-size:12px;color:#94a3b8;">+${count - 15}</div>` : ''}</div>
-                            <div class="pile-count">${count}</div>
-                        </div>`).join('')}
-                </div>`;
-            break;
-    }
-    renderControls();
-}
-
-function selectBothPiles() {
-    const isSingle = myRoomCode && myRoomCode.startsWith('single-');
-    if (isSingle && gameEngine.currentPlayer !== 1) return;
-    if (!isSingle && gameEngine.currentPlayer !== myPlayerNumber) return;
-    gameEngine.selectedPile = -1;
-    renderBoard();
-}
-function pickLetter(side) {
-    const isSingle = myRoomCode && myRoomCode.startsWith('single-');
-    if (!isSingle && gameEngine.currentPlayer !== myPlayerNumber) return;
-    if (isSingle && gameEngine.currentPlayer !== 1) return;
-
-    const word = currentProblem.word;
-    const letter = side === 'left' ? word[0] : word[word.length - 1];
-    const newWord = side === 'left' ? word.slice(1) : word.slice(0, -1);
-    
-    currentProblem.word = newWord;
-    gameEngine.moveHistory.push({ player: gameEngine.currentPlayer, side, letter, wordAfter: newWord });
-
-    addLog(`${isSingle ? '你' : '玩家' + myPlayerNumber} 取${side === 'left' ? '左' : '右'}端 "${letter}"`);
-    document.getElementById(`seq${gameEngine.currentPlayer}`).textContent = 
-        (document.getElementById(`seq${gameEngine.currentPlayer}`).textContent === '-' ? '' : document.getElementById(`seq${gameEngine.currentPlayer}`).textContent) + letter;
-
-    if (newWord.length === 0) {
-        // 比较字典序
-        const seq1 = document.getElementById('seq1').textContent;
-        const seq2 = document.getElementById('seq2').textContent;
-        const winner = seq1 > seq2 ? 1 : seq2 > seq1 ? 2 : 0;
-        if (winner === 0) {
-            addLog('🤝 平局！');
-            document.getElementById('turn-indicator').textContent = '🤝 平局！';
-            document.getElementById('game-controls').innerHTML = `
-                <div style="text-align:center;padding:20px;">
-                    <h2>🤝 平局！</h2>
-                    <button class="btn-primary" onclick="location.reload()">🔄 再来一局</button>
-                </div>`;
-            clearInterval(timerInterval);
-        } else {
-            isSingle ? endGameSingle(winner) : endGame(winner);
-        }
-        return;
-    }
-
-    gameEngine.switchPlayer();
-    renderBoard();
-    if (isSingle) { updateTurnDisplaySingle(); resetTimer(); if (gameEngine.currentPlayer === 2) aiMove(); }
-    else { updateTurnDisplay(); resetTimer(); }
-}
-function renderControls() {
-    if (currentProblem.boardType === 'text' && gameEngine.currentPlayer === (myRoomCode && myRoomCode.startsWith('single-') ? 1 : myPlayerNumber)) {
-        const isSingle = myRoomCode && myRoomCode.startsWith('single-');
-        if (!isSingle && gameEngine.currentPlayer !== myPlayerNumber) {
-            controls.innerHTML = '<div class="waiting-overlay">⏳ 等待对手出手...</div>';
-            return;
-        }
-        controls.innerHTML = `
-            <div class="take-controls">
-                <button class="btn-primary" onclick="pickLetter('left')">⬅️ 取左边</button>
-                <button class="btn-primary" onclick="pickLetter('right')">➡️ 取右边</button>
-            </div>
-        `;
-        return;
-    }
-    const controls = document.getElementById('game-controls');
-    const isSingle = myRoomCode && myRoomCode.startsWith('single-');
-
-    if (isSingle && gameEngine.currentPlayer === 2) {
-        controls.innerHTML = '<div class="waiting-overlay">🤖 AI 思考中...</div>'; return;
-    }
-    if (!isSingle && gameEngine.currentPlayer !== myPlayerNumber) {
-        controls.innerHTML = '<div class="waiting-overlay">⏳ 等待对手出手...</div>'; return;
-    }
-        // 欧几里得自动选中
-    if (currentProblem.rule === 'euclid' && gameEngine.selectedPile === null) {
-        gameEngine.selectedPile = 0;
-    }
-    // 递减游戏自动选中
-    if (currentProblem.rule === 'decreasing' && gameEngine.selectedPile === null && gameEngine.piles.some(p => p > 1)) {
-        gameEngine.selectedPile = 0;
-    }
-    if (currentProblem.boardType === 'single-row' && gameEngine.selectedPile === null && gameEngine.piles[0] > 0) {
-        gameEngine.selectedPile = 0;
-    }
-    if (gameEngine.selectedPile === null) {
-        controls.innerHTML = '<div class="waiting-overlay">👆 请先点击选择一堆石子</div>'; return;
-    }
-    if (currentProblem.boardType === 'wythoff' && gameEngine.selectedPile === -1) {
-        const minPile = Math.min(gameEngine.piles[0], gameEngine.piles[1]);
-        controls.innerHTML = `<div class="take-controls"><span>两堆同时取走</span><input type="number" id="take-count" min="1" max="${minPile}" value="1"><span>个（最多${minPile}个）</span><button class="btn-primary" onclick="makeMove()">✅ 确认</button></div>`;
-        return;
-    }
-        // 递减游戏固定取1
-    if (currentProblem.rule === 'decreasing') {
-        controls.innerHTML = `
-            <div class="take-controls">
-                <span>选一个大于1的数减1</span>
-                <button class="btn-primary" onclick="makeMoveDecrease()">✅ 减1</button>
-            </div>`;
-        return;
-    }
-
-    // 欧几里得：选择减多少倍
-    if (currentProblem.rule === 'euclid') {
-        const a = gameEngine.piles[0];
-        const b = gameEngine.piles[1];
-        const maxK = Math.floor(a / b);
-        controls.innerHTML = `
-            <div class="take-controls">
-                <span>${a} 减去 ${b} 的</span>
-                <input type="number" id="take-count" min="1" max="${maxK}" value="1">
-                <span>倍（最多${maxK}倍）</span>
-                <button class="btn-primary" onclick="makeMove()">✅ 确认</button>
-            </div>`;
-        return;
-    }
-    const pileCount = gameEngine.piles[gameEngine.selectedPile];
-    let maxTake = pileCount;
-    if (currentProblem.rule === 'bash' && currentProblem.maxTake) maxTake = Math.min(pileCount, currentProblem.maxTake);
-    const pileLabel = currentProblem.boardType === 'single-row' ? '' : `从第${gameEngine.selectedPile + 1}堆`;
-    controls.innerHTML = `<div class="take-controls"><span>${pileLabel}取走</span><input type="number" id="take-count" min="1" max="${maxTake}" value="1"><span>个（最多${maxTake}个）</span><button class="btn-primary" onclick="makeMove()">✅ 确认</button></div>`;
-}
-
-function selectPile(index) {
-    const isSingle = myRoomCode && myRoomCode.startsWith('single-');
-    if (isSingle && gameEngine.currentPlayer !== 1) return;
-    if (!isSingle && gameEngine.currentPlayer !== myPlayerNumber) return;
-    if (gameEngine.piles[index] === 0) return;
-    gameEngine.selectedPile = gameEngine.selectedPile === index ? null : index;
-    renderBoard();
-}
-function makeMoveDecrease() {
-    const isSingle = myRoomCode && myRoomCode.startsWith('single-');
-    if (!isSingle && gameEngine.currentPlayer !== myPlayerNumber) return;
-    if (isSingle && gameEngine.currentPlayer !== 1) return;
-
-    let idx = -1;
-    for (let i = 0; i < gameEngine.piles.length; i++) {
-        if (gameEngine.piles[i] > 1) { idx = i; break; }
-    }
-    if (idx === -1) { alert('没有可以减的数！'); return; }
-
-    gameEngine.piles[idx]--;
-    gameEngine.moveHistory.push({ player: gameEngine.currentPlayer, pileIndex: idx, count: 1, pilesAfter: [...gameEngine.piles] });
-    addLog(`${isSingle ? '你' : '玩家' + myPlayerNumber} 把第${idx + 1}个数减1`);
-
-    finishTurn(isSingle);
-}
-
-function finishTurn(isSingle) {
-    const winner = gameEngine.checkGameOver();
-    if (winner) { isSingle ? endGameSingle(winner) : endGame(winner); return; }
-    gameEngine.switchPlayer();
-    renderBoard();
-    if (isSingle) { updateTurnDisplaySingle(); resetTimer(); if (gameEngine.currentPlayer === 2) aiMove(); }
-    else { updateTurnDisplay(); resetTimer(); }
-}
-async function makeMove() {
-    const isSingle = myRoomCode && myRoomCode.startsWith('single-');
-    if (!isSingle && gameEngine.currentPlayer !== myPlayerNumber) return;
-    if (isSingle && gameEngine.currentPlayer !== 1) return;
-    if (gameEngine.selectedPile === null) return;
-        // 欧几里得特殊处理
-    if (currentProblem.rule === 'euclid') {
-        const k = parseInt(document.getElementById('take-count').value);
-        const a = gameEngine.piles[0];
-        const b = gameEngine.piles[1];
-        if (k < 1 || k * b > a) { alert('非法操作！'); return; }
-        gameEngine.piles[0] = a - k * b;
-        gameEngine.moveHistory.push({ player: gameEngine.currentPlayer, pileIndex: 0, count: k, pilesAfter: [...gameEngine.piles] });
-        addLog(`${isSingle ? '你' : '玩家' + myPlayerNumber} 将较大数减去${k}倍较小数`);
-        if (gameEngine.piles[0] < gameEngine.piles[1]) {
-            [gameEngine.piles[0], gameEngine.piles[1]] = [gameEngine.piles[1], gameEngine.piles[0]];
-        }
-        finishTurn(isSingle);
-        return;
-    }
-    const count = parseInt(document.getElementById('take-count').value);
-    const isWythoffBoth = gameEngine.selectedPile === -1;
-
-    if (isWythoffBoth) {
-        if (count > gameEngine.piles[0] || count > gameEngine.piles[1]) { alert('数量超过其中一堆！'); return; }
-        gameEngine.piles[0] -= count; gameEngine.piles[1] -= count;
-        gameEngine.moveHistory.push({ player: gameEngine.currentPlayer, pileIndex: -1, count, pilesAfter: [...gameEngine.piles] });
-        addLog(`${isSingle ? '你' : '玩家' + myPlayerNumber} 从两堆同时取走${count}个石子`);
-    } else {
-        const pileIndex = gameEngine.selectedPile;
-        if (!gameEngine.isValidMove(pileIndex, count)) { alert('非法操作！'); return; }
-        gameEngine.makeMove(pileIndex, count);
-        addLog(`${isSingle ? '你' : '玩家' + myPlayerNumber} 从第${pileIndex + 1}堆取走${count}个石子`);
-    }
-
-    if (!isSingle && channel) {
-        await channel.send({ type: 'move', payload: { isWythoffBoth, pileIndex: gameEngine.selectedPile, count, state: gameEngine.getState() } });
-        await supabaseClient.from('moves').insert({ room_code: myRoomCode, player: `player${myPlayerNumber}`, move_data: { isWythoffBoth, pileIndex: gameEngine.selectedPile, count } });
-    }
-    finishTurn(isSingle);
-}
-
 function handleRemoteMove(payload) {
     if (payload.isWythoffBoth) {
         gameEngine.piles[0] -= payload.count; gameEngine.piles[1] -= payload.count;
-        gameEngine.moveHistory.push({ player: gameEngine.currentPlayer, pileIndex: -1, count: payload.count, pilesAfter: [...gameEngine.piles] });
-        addLog(`玩家${gameEngine.currentPlayer} 从两堆同时取走${payload.count}个石子`);
+        addLog(`对手从两堆同时取走${payload.count}个石子`);
     } else {
         gameEngine.loadState(payload.state);
-        addLog(`玩家${gameEngine.currentPlayer === 1 ? 2 : 1} 从第${payload.pileIndex + 1}堆取走${payload.count}个石子`);
+        addLog(`对手从第${payload.pileIndex + 1}堆取走${payload.count}个石子`);
     }
     gameEngine.selectedPile = null;
     const winner = gameEngine.checkGameOver();
     if (winner) { endGame(winner); return; }
     gameEngine.switchPlayer(); renderBoard(); updateTurnDisplay(); resetTimer();
 }
-
-function handleGameStart(payload) { currentProblem = payload.problem; gameEngine = new GameEngine(currentProblem); renderBoard(); updateTurnDisplay(); resetTimer(); }
-function handleGameOver(payload) { endGame(payload.winner); }
 
 function endGame(winner) {
     clearInterval(timerInterval);
@@ -795,6 +531,184 @@ function endGame(winner) {
     document.getElementById('game-controls').innerHTML = `<div style="text-align:center;padding:20px;"><h2>${isMe ? '🎉 恭喜获胜！' : '😢 败北！'}</h2><button class="btn-primary" onclick="location.reload()">🔄 再来一局</button></div>`;
     if (channel) channel.send({ type: 'game_over', payload: { winner } });
     supabaseClient.from('rooms').update({ status: 'finished', winner: `player${winner}` }).eq('room_code', myRoomCode);
+}
+
+// ==================== 棋盘渲染 ====================
+function renderBoard() {
+    const board = document.getElementById('game-board');
+    const boardType = currentProblem.boardType || 'multi-pile';
+    const piles = gameEngine.piles;
+
+    switch (boardType) {
+        case 'single-row':
+            const total = piles[0];
+            let stoneSize = total > 50 ? 16 : (total > 30 ? 20 : 28);
+            board.innerHTML = `<div class="bash-row"><div class="bash-label">石子总数：<strong>${total}</strong></div><div class="bash-stones">${Array(total).fill(0).map(() => `<div class="stone" style="width:${stoneSize}px;height:${stoneSize}px;"></div>`).join('')}</div></div>`;
+            break;
+        case 'wythoff':
+            board.innerHTML = `<div class="board-row">${piles.map((c, i) => `<div class="pile ${gameEngine.selectedPile===i?'selected':''}" onclick="selectPile(${i})"><div class="pile-label">第${i+1}堆</div><div class="pile-stones">${Array(Math.min(c,20)).fill(0).map(()=>'<div class="stone"></div>').join('')}${c>20?`<div class="stone-more">+${c-20}</div>`:''}</div><div class="pile-count">${c}</div></div>`).join('')}</div><div style="text-align:center;margin-top:12px;"><button class="btn-secondary btn-sm" onclick="selectBothPiles()">🎯 从两堆同时取</button></div>`;
+            break;
+        case 'euclid':
+            board.innerHTML = `<div class="board-row">${piles.map((c, i) => `<div class="pile"><div class="pile-label">${i===0?'较大数':'较小数'}</div><div class="pile-count" style="font-size:36px;">${c}</div></div>`).join('')}</div>`;
+            break;
+        case 'text':
+            const word = currentProblem.word || 'ABBA';
+            board.innerHTML = `<div class="bash-row"><div class="bash-label">📝 字符串：<strong style="font-size:28px;letter-spacing:6px;">${word}</strong></div><div style="margin-top:16px;display:flex;justify-content:center;gap:40px;"><div>🔴 你：<strong id="seq1">-</strong></div><div>🔵 AI：<strong id="seq2">-</strong></div></div></div>`;
+            break;
+        default:
+            if (!piles || piles.length === 0) { board.innerHTML = '<div class="bash-row">等待游戏开始...</div>'; break; }
+            board.innerHTML = `<div class="board-row">${piles.map((c, i) => `<div class="pile ${gameEngine.selectedPile===i?'selected':''}" onclick="selectPile(${i})"><div class="pile-label">第${i+1}堆</div><div class="pile-stones">${Array(Math.min(c,15)).fill(0).map(()=>'<div class="stone"></div>').join('')}${c>15?`<div class="stone-more">+${c-15}</div>`:''}</div><div class="pile-count">${c}</div></div>`).join('')}</div>`;
+    }
+    renderControls();
+}
+
+// ==================== 操作控件 ====================
+function renderControls() {
+    const controls = document.getElementById('game-controls');
+    const isSingle = myRoomCode && myRoomCode.startsWith('single-');
+    if (currentProblem.boardType === 'text') {
+        if (gameEngine.currentPlayer === 2) { controls.innerHTML = '<div class="waiting-overlay">🤖 AI 思考中...</div>'; return; }
+        controls.innerHTML = `<div class="take-controls"><button class="btn-primary" onclick="pickLetter('left')">⬅️ 取左边</button><button class="btn-primary" onclick="pickLetter('right')">➡️ 取右边</button></div>`;
+        return;
+    }
+    if (isSingle && gameEngine.currentPlayer === 2) { controls.innerHTML = '<div class="waiting-overlay">🤖 AI 思考中...</div>'; return; }
+    if (!isSingle && gameEngine.currentPlayer !== myPlayerNumber) { controls.innerHTML = '<div class="waiting-overlay">⏳ 等待对手出手...</div>'; return; }
+
+    if (currentProblem.rule === 'decreasing') {
+        if (gameEngine.selectedPile === null || gameEngine.piles[gameEngine.selectedPile] <= 1) {
+            controls.innerHTML = '<div class="waiting-overlay">👆 点击一个大于1的数来减1</div>';
+        } else {
+            controls.innerHTML = `<div class="take-controls"><span>将第${gameEngine.selectedPile+1}个数减1</span><button class="btn-primary" onclick="makeMoveDecrease()">✅ 确认</button></div>`;
+        }
+        return;
+    }
+    if (currentProblem.rule === 'euclid' && gameEngine.selectedPile === null) {
+        gameEngine.selectedPile = 0;
+    }
+    if (currentProblem.boardType === 'single-row' && gameEngine.selectedPile === null) gameEngine.selectedPile = 0;
+    if (gameEngine.selectedPile === null) { controls.innerHTML = '<div class="waiting-overlay">👆 请先选择一堆石子</div>'; return; }
+
+    if (currentProblem.rule === 'euclid') {
+        const a = gameEngine.piles[0], b = gameEngine.piles[1];
+        const maxK = Math.floor(a / b);
+        controls.innerHTML = `<div class="take-controls"><span>${a} 减去 ${b} 的</span><input type="number" id="take-count" min="1" max="${maxK}" value="1"><span>倍</span><button class="btn-primary" onclick="makeMove()">✅ 确认</button></div>`;
+        return;
+    }
+    if (currentProblem.boardType === 'wythoff' && gameEngine.selectedPile === -1) {
+        const minP = Math.min(gameEngine.piles[0], gameEngine.piles[1]);
+        controls.innerHTML = `<div class="take-controls"><span>两堆同时取</span><input type="number" id="take-count" min="1" max="${minP}" value="1"><span>个</span><button class="btn-primary" onclick="makeMove()">✅ 确认</button></div>`;
+        return;
+    }
+    const pileCount = gameEngine.piles[gameEngine.selectedPile];
+    let maxTake = pileCount;
+    if (currentProblem.rule === 'bash' && currentProblem.maxTake) maxTake = Math.min(pileCount, currentProblem.maxTake);
+    const label = currentProblem.boardType === 'single-row' ? '取走' : `从第${gameEngine.selectedPile+1}堆取走`;
+    controls.innerHTML = `<div class="take-controls"><span>${label}</span><input type="number" id="take-count" min="1" max="${maxTake}" value="1"><span>个（最多${maxTake}）</span><button class="btn-primary" onclick="makeMove()">✅ 确认</button></div>`;
+}
+
+function selectPile(index) {
+    const isSingle = myRoomCode && myRoomCode.startsWith('single-');
+    if (isSingle && gameEngine.currentPlayer !== 1) return;
+    if (!isSingle && gameEngine.currentPlayer !== myPlayerNumber) return;
+    if (currentProblem.rule === 'decreasing' && gameEngine.piles[index] <= 1) return;
+    if (gameEngine.piles[index] === 0 && currentProblem.rule !== 'decreasing') return;
+    gameEngine.selectedPile = gameEngine.selectedPile === index ? null : index;
+    renderBoard();
+}
+
+function selectBothPiles() {
+    const isSingle = myRoomCode && myRoomCode.startsWith('single-');
+    if (isSingle && gameEngine.currentPlayer !== 1) return;
+    gameEngine.selectedPile = -1;
+    renderBoard();
+}
+
+// ==================== 移动操作 ====================
+function makeMove() {
+    const isSingle = myRoomCode && myRoomCode.startsWith('single-');
+    if (!isSingle && gameEngine.currentPlayer !== myPlayerNumber) return;
+    if (isSingle && gameEngine.currentPlayer !== 1) return;
+    if (gameEngine.selectedPile === null) return;
+
+    if (currentProblem.rule === 'euclid') {
+        const k = parseInt(document.getElementById('take-count').value);
+        const a = gameEngine.piles[0], b = gameEngine.piles[1];
+        if (k < 1 || k * b > a) { alert('非法操作！'); return; }
+        gameEngine.piles[0] = a - k * b;
+        gameEngine.moveHistory.push({ player: gameEngine.currentPlayer, pileIndex: 0, count: k, pilesAfter: [...gameEngine.piles] });
+        addLog(`${isSingle ? '你' : '玩家'+myPlayerNumber} 将较大数减去${k}倍较小数`);
+        if (gameEngine.piles[0] < gameEngine.piles[1]) [gameEngine.piles[0], gameEngine.piles[1]] = [gameEngine.piles[1], gameEngine.piles[0]];
+        finishTurn(isSingle);
+        return;
+    }
+    if (currentProblem.rule === 'wythoff' && gameEngine.selectedPile === -1) {
+        const count = parseInt(document.getElementById('take-count').value);
+        if (count > gameEngine.piles[0] || count > gameEngine.piles[1]) { alert('超过数量！'); return; }
+        gameEngine.piles[0] -= count; gameEngine.piles[1] -= count;
+        gameEngine.moveHistory.push({ player: gameEngine.currentPlayer, pileIndex: -1, count, pilesAfter: [...gameEngine.piles] });
+        addLog(`${isSingle ? '你' : '玩家'+myPlayerNumber} 从两堆同时取走${count}个石子`);
+        finishTurn(isSingle);
+        return;
+    }
+    const pileIndex = gameEngine.selectedPile;
+    const count = parseInt(document.getElementById('take-count').value);
+    if (!gameEngine.isValidMove(pileIndex, count)) { alert('非法操作！'); return; }
+    gameEngine.makeMove(pileIndex, count);
+    addLog(`${isSingle ? '你' : '玩家'+myPlayerNumber} 从第${pileIndex+1}堆取走${count}个石子`);
+    if (!isSingle && channel) channel.send({ type: 'move', payload: { pileIndex, count, state: gameEngine.getState() } });
+    finishTurn(isSingle);
+}
+
+function makeMoveDecrease() {
+    const isSingle = myRoomCode && myRoomCode.startsWith('single-');
+    if (!isSingle && gameEngine.currentPlayer !== myPlayerNumber) return;
+    const idx = gameEngine.selectedPile;
+    if (idx === null || gameEngine.piles[idx] <= 1) return;
+    gameEngine.piles[idx]--;
+    gameEngine.moveHistory.push({ player: gameEngine.currentPlayer, pileIndex: idx, count: 1, pilesAfter: [...gameEngine.piles] });
+    addLog(`${isSingle ? '你' : '玩家'+myPlayerNumber} 把第${idx+1}个数减1`);
+    finishTurn(isSingle);
+}
+
+function pickLetter(side) {
+    const isSingle = myRoomCode && myRoomCode.startsWith('single-');
+    const word = currentProblem.word;
+    const letter = side === 'left' ? word[0] : word[word.length-1];
+    currentProblem.word = side === 'left' ? word.slice(1) : word.slice(0, -1);
+    gameEngine.moveHistory.push({ player: gameEngine.currentPlayer, side, letter });
+    const seqEl = document.getElementById(`seq${gameEngine.currentPlayer}`);
+    if (seqEl) seqEl.textContent = (seqEl.textContent === '-' ? '' : seqEl.textContent) + letter;
+    addLog(`${isSingle ? '你' : '玩家'+myPlayerNumber} 取${side==='left'?'左':'右'}端 "${letter}"`);
+    if (currentProblem.word.length === 0) { endLetterGame(); return; }
+    gameEngine.switchPlayer();
+    renderBoard();
+    if (isSingle) { updateTurnDisplaySingle(); resetTimer(); if (gameEngine.currentPlayer === 2) aiMove(); }
+    else { updateTurnDisplay(); resetTimer(); }
+}
+
+function endLetterGame() {
+    clearInterval(timerInterval);
+    const seq1 = document.getElementById('seq1')?.textContent || '';
+    const seq2 = document.getElementById('seq2')?.textContent || '';
+    let winner = 0;
+    if (seq1 > seq2) winner = 1;
+    else if (seq2 > seq1) winner = 2;
+    if (winner === 0) {
+        document.getElementById('turn-indicator').textContent = '🤝 平局！';
+        document.getElementById('game-controls').innerHTML = '<div style="text-align:center;padding:20px;"><h2>🤝 平局！</h2><button class="btn-primary" onclick="location.reload()">🔄 再来一局</button></div>';
+    } else {
+        endGameSingle(winner);
+    }
+}
+
+function finishTurn(isSingle) {
+    const winner = gameEngine.checkGameOver();
+    if (winner === 0) { endLetterGame(); return; }
+    if (winner) { isSingle ? endGameSingle(winner) : endGame(winner); return; }
+    gameEngine.switchPlayer();
+    renderBoard();
+    if (isSingle) { updateTurnDisplaySingle(); resetTimer(); if (gameEngine.currentPlayer === 2) aiMove(); }
+    else { updateTurnDisplay(); resetTimer(); }
 }
 
 // ==================== 计时器 ====================

@@ -30,7 +30,7 @@
                     <button class="btn-secondary btn-lg" onclick="switchPage('problems')">📚 浏览题库</button>
                 </div>
                 <div class="hero-stats">
-                    <div class="stat"><span class="stat-num">6+</span><span class="stat-label">博弈类型</span></div>
+                    <div class="stat"><span class="stat-num">7+</span><span class="stat-label">博弈类型</span></div>
                     <div class="stat"><span class="stat-num">3</span><span class="stat-label">难度等级</span></div>
                     <div class="stat"><span class="stat-num">∞</span><span class="stat-label">策略组合</span></div>
                 </div>
@@ -40,6 +40,7 @@
         <!-- 题库页 -->
         <section id="problems" class="page">
             <h2>📚 博弈论题库</h2>
+            <p style="color:#94a3b8;margin-bottom:16px;">点击卡片查看原题链接，选择题目后进入对战</p>
             <div class="problem-grid" id="problem-grid"></div>
         </section>
 
@@ -69,9 +70,9 @@
                             </div>
                         </div>
                         <div class="config-row">
-                            <label>石子数量：</label>
+                            <label id="config-label">自定义配置：</label>
                             <div class="stone-config">
-                                <input type="number" id="custom-stones" placeholder="默认" min="1">
+                                <input type="text" id="custom-stones" placeholder="默认">
                                 <button class="btn-secondary btn-sm" onclick="randomStones()">🎲 随机</button>
                             </div>
                         </div>
