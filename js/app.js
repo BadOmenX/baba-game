@@ -118,6 +118,7 @@ function startGame() {
 }
 
 async function startSinglePlayer() {
+    
     const problem = PROBLEMS.find(p => p.id === selectedRule);
     if (!problem) return;
 
@@ -149,7 +150,8 @@ async function startSinglePlayer() {
     myRoomCode = 'single-' + Date.now(); myPlayerNumber = 1;
     document.getElementById('room-lobby').style.display = 'none';
     document.getElementById('game-room').style.display = 'block';
-    document.getElementById('room-badge').textContent = `单人 · ${selectedDifficulty==='hard'?'困难':'普通'}`;
+    document.getElementById('room-badge').textContent = `单人 · ${selectedDifficulty === 'hard' ? '困难' : '普通'}`;
+    document.getElementById('room-badge').style.display = 'none';
     document.getElementById('name-p1').textContent = '你';
     document.getElementById('name-p2').textContent = '🤖 AI';
     document.getElementById('log-list').innerHTML = '';
@@ -256,7 +258,8 @@ async function createRoom(){
     if(error){alert('创建房间失败');return;}
     myRoomCode=roomCode;myPlayerNumber=1;currentProblem={...problem,piles};
     document.getElementById('room-lobby').style.display='none';document.getElementById('game-room').style.display='block';
-    document.getElementById('room-badge').textContent=roomCode;
+    document.getElementById('room-badge').textContent = roomCode;
+    document.getElementById('room-badge').style.display = 'inline-block';
     document.getElementById('name-p1').textContent='你 (玩家1)';document.getElementById('name-p2').textContent='等待加入...';
     document.getElementById('game-board').innerHTML='';document.getElementById('game-controls').innerHTML='';
     document.getElementById('turn-indicator').textContent='等待对手加入...';
@@ -274,7 +277,7 @@ async function joinRoom(){
     subscribeToRoom(roomCode);enterGameRoom(roomCode,currentProblem);
 }
 async function subscribeToRoom(roomCode){channel=supabaseClient.channel(`room:${roomCode}`);channel.on('broadcast',{event:'move'},(payload)=>handleRemoteMove(payload.payload)).on('broadcast',{event:'game_over'},(payload)=>endGame(payload.winner)).subscribe();}
-function enterGameRoom(roomCode,problem){document.getElementById('room-lobby').style.display='none';document.getElementById('game-room').style.display='block';document.getElementById('room-badge').textContent=roomCode;document.getElementById('name-p1').textContent=myPlayerNumber===1?'你 (玩家1)':'玩家1';document.getElementById('name-p2').textContent=myPlayerNumber===2?'你 (玩家2)':'玩家2';gameEngine=new GameEngine(problem);renderBoard();updateTurnDisplay();startTimer();}
+function enterGameRoom(roomCode,problem){document.getElementById('room-badge').style.display = 'inline-block';document.getElementById('room-lobby').style.display='none';document.getElementById('game-room').style.display='block';document.getElementById('room-badge').textContent=roomCode;document.getElementById('name-p1').textContent=myPlayerNumber===1?'你 (玩家1)':'玩家1';document.getElementById('name-p2').textContent=myPlayerNumber===2?'你 (玩家2)':'玩家2';gameEngine=new GameEngine(problem);renderBoard();updateTurnDisplay();startTimer();}
 function handleRemoteMove(payload){gameEngine.loadState(payload.state);addLog(`玩家${gameEngine.currentPlayer===1?2:1} 从第${payload.pileIndex+1}堆取走${payload.count}个石子`);gameEngine.selectedPile=null;const winner=gameEngine.checkGameOver();if(winner){endGame(winner);return;}gameEngine.switchPlayer();renderBoard();updateTurnDisplay();resetTimer();}
 function endGame(winner){clearInterval(timerInterval);const isMe=winner===myPlayerNumber;document.getElementById('turn-indicator').textContent=isMe?'🎉 你赢了！':'😢 你输了！';document.getElementById('game-controls').innerHTML=`<div style="text-align:center;padding:20px;"><h2>${isMe?'🎉 恭喜获胜！':'😢 败北！'}</h2><button class="btn-primary" onclick="location.reload()">🔄 再来一局</button></div>`;if(channel)channel.send({type:'game_over',payload:{winner}});supabaseClient.from('rooms').update({status:'finished',winner:`player${winner}`}).eq('room_code',myRoomCode);}
 

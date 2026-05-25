@@ -193,6 +193,27 @@ main { max-width: 1050px; margin: 0 auto; padding: 32px 20px; }
 .diff-btn:hover { border-color: rgba(168, 85, 247, 0.5); }
 .diff-btn.active { background: linear-gradient(135deg, #6366f1, #8b5cf6); border-color: transparent; color: #fff; }
 
+/* 美化文本框 */
+.stone-config input, #room-code-input, #custom-stones {
+    padding: 10px 14px;
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    color: #e2e8f0;
+    border-radius: 10px;
+    font-size: 15px;
+    transition: all 0.2s;
+    outline: none;
+    width: 180px;
+}
+.stone-config input:focus, #room-code-input:focus, #custom-stones:focus {
+    border-color: #818cf8;
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.3);
+}
+.stone-config input::placeholder, #room-code-input::placeholder, #custom-stones::placeholder {
+    color: rgba(148, 163, 184, 0.5);
+}
+
 #game-room { margin-top: 16px; }
 .game-top-bar {
     display: flex; justify-content: space-between; align-items: center;
@@ -236,6 +257,7 @@ main { max-width: 1050px; margin: 0 auto; padding: 32px 20px; }
     padding: 12px 18px; margin: 12px 0; font-size: 14px; color: #94a3b8; text-align: center;
 }
 
+/* 棋盘居中容器 */
 .game-board {
     margin: 20px 0; padding: 20px;
     background: rgba(15, 23, 42, 0.4);
@@ -243,8 +265,14 @@ main { max-width: 1050px; margin: 0 auto; padding: 32px 20px; }
     border-radius: 20px;
     border: 1px solid rgba(148, 163, 184, 0.06);
     min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
-.bash-stones { gap: 6px; }
+
+.bash-row { text-align: center; width: 100%; }
+.bash-stones { gap: 6px; display: flex; flex-wrap: wrap; justify-content: center; }
 .stone {
     width: 26px; height: 26px; border-radius: 50%;
     background: radial-gradient(circle at 35% 35%, #e2e8f0, #64748b);
@@ -253,7 +281,9 @@ main { max-width: 1050px; margin: 0 auto; padding: 32px 20px; }
 }
 .stone:hover { transform: scale(1.2); }
 
-.grid-board { display: grid; gap: 4px; justify-content: center; margin: 10px 0; }
+.board-row { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
+
+.grid-board { display: grid; gap: 4px; justify-content: center; margin: 10px auto; }
 .grid-cell {
     width: 54px; height: 54px; border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
@@ -275,6 +305,16 @@ main { max-width: 1050px; margin: 0 auto; padding: 32px 20px; }
     border-radius: 16px;
     background: rgba(15, 23, 42, 0.4);
     backdrop-filter: blur(4px);
+    display: block;
+    margin: 0 auto;
+}
+
+.game-controls {
+    text-align: center;
+    margin: 16px 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .game-log {
