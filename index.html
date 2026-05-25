@@ -19,41 +19,36 @@
     </header>
 
     <main>
-        <!-- 首页 -->
         <section id="home" class="page active">
             <div class="hero">
                 <h1>🕹️ 巴巴博弈</h1>
-                <p class="subtitle">巴什博弈 · Nim游戏 · 威佐夫博弈 · 在线实时对战</p>
-                <p class="hero-desc">选择规则，挑选难度，与AI或好友展开智力对决</p>
+                <p class="subtitle">棋盘博弈 · Nim变体 · 树上博弈 · 在线实时对战</p>
+                <p class="hero-desc">精选洛谷/CF经典博弈论题目，图形化交互体验</p>
                 <div class="hero-buttons">
                     <button class="btn-primary btn-lg pulse" onclick="switchPage('battle')">⚔️ 开始对战</button>
                     <button class="btn-secondary btn-lg" onclick="switchPage('problems')">📚 浏览题库</button>
                 </div>
                 <div class="hero-stats">
-                    <div class="stat"><span class="stat-num">7+</span><span class="stat-label">博弈类型</span></div>
-                    <div class="stat"><span class="stat-num">3</span><span class="stat-label">难度等级</span></div>
-                    <div class="stat"><span class="stat-num">∞</span><span class="stat-label">策略组合</span></div>
+                    <div class="stat"><span class="stat-num">9+</span><span class="stat-label">博弈类型</span></div>
+                    <div class="stat"><span class="stat-num">2</span><span class="stat-label">难度等级</span></div>
+                    <div class="stat"><span class="stat-num">∞</span><span class="stat-label">策略空间</span></div>
                 </div>
             </div>
         </section>
 
-        <!-- 题库页 -->
         <section id="problems" class="page">
             <h2>📚 博弈论题库</h2>
-            <p style="color:#94a3b8;margin-bottom:16px;">点击卡片查看原题链接，选择题目后进入对战</p>
+            <p style="color:#94a3b8;margin-bottom:8px;">🖱️ 点击「查看原题」跳转洛谷，点击「开始对战」进入游戏</p>
             <div class="problem-grid" id="problem-grid"></div>
         </section>
 
-        <!-- 对战页 -->
         <section id="battle" class="page">
             <h2>⚔️ 对战房间</h2>
             <div id="room-lobby">
-                <!-- 步骤1：选规则 -->
                 <div class="setup-step" id="step-rule">
                     <h3>🎯 选择博弈规则</h3>
                     <div class="rule-cards" id="rule-cards"></div>
                 </div>
-                <!-- 步骤2：选模式 + 难度 + 配置 -->
                 <div class="setup-step hidden" id="step-config">
                     <h3>⚙️ 对战设置</h3>
                     <div class="mode-select">
@@ -64,17 +59,20 @@
                         <div class="config-row">
                             <label>AI 难度：</label>
                             <div class="difficulty-select">
-                                <button class="diff-btn" data-diff="easy" onclick="selectDifficulty('easy')">😊 简单</button>
-                                <button class="diff-btn active" data-diff="medium" onclick="selectDifficulty('medium')">🤔 中等</button>
+                                <button class="diff-btn active" data-diff="normal" onclick="selectDifficulty('normal')">😊 普通</button>
                                 <button class="diff-btn" data-diff="hard" onclick="selectDifficulty('hard')">🧠 困难</button>
                             </div>
                         </div>
-                        <div class="config-row">
+                        <div class="config-row" id="custom-config-row">
                             <label id="config-label">自定义配置：</label>
                             <div class="stone-config">
                                 <input type="text" id="custom-stones" placeholder="默认">
                                 <button class="btn-secondary btn-sm" onclick="randomStones()">🎲 随机</button>
                             </div>
+                        </div>
+                        <div class="config-row hidden" id="challenge-config-row">
+                            <label>选择局面：</label>
+                            <select id="challenge-select"></select>
                         </div>
                     </div>
                     <div id="multi-config" class="hidden">
@@ -109,10 +107,9 @@
                         <div class="player-timer" id="timer-p2">30</div>
                     </div>
                 </div>
-
+                <div class="rule-hint" id="rule-hint"></div>
                 <div class="game-board" id="game-board"></div>
                 <div class="game-controls" id="game-controls"></div>
-
                 <div class="game-log">
                     <h4>📜 对战记录</h4>
                     <div id="log-list"></div>
