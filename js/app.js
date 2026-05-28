@@ -118,7 +118,6 @@ function startGame() {
 }
 
 async function startSinglePlayer() {
-    
     const problem = PROBLEMS.find(p => p.id === selectedRule);
     if (!problem) return;
 
@@ -150,7 +149,7 @@ async function startSinglePlayer() {
     myRoomCode = 'single-' + Date.now(); myPlayerNumber = 1;
     document.getElementById('room-lobby').style.display = 'none';
     document.getElementById('game-room').style.display = 'block';
-    document.getElementById('room-badge').textContent = `单人 · ${selectedDifficulty === 'hard' ? '困难' : '普通'}`;
+    document.getElementById('room-badge').textContent = `单人 · ${selectedDifficulty==='hard'?'困难':'普通'}`;
     document.getElementById('room-badge').style.display = 'none';
     document.getElementById('name-p1').textContent = '你';
     document.getElementById('name-p2').textContent = '🤖 AI';
@@ -194,26 +193,71 @@ async function aiMove() {
     if (rule === 'wood-chess') { woodAiMove(); return; }
     if (['tree-game','tom-jerry','string-game'].includes(rule)) return;
 
-    if (selectedDifficulty === 'hard' && ['fragmented-nim','yet-another'].includes(rule)) {
-        let rulesText = rule==='fragmented-nim'?'碎片化Nim：对手指定堆，你取子。':'Yet Another Number Game：可选一堆减任意或全局减相同值。';
-        const prompt = `${currentProblem.name}。${rulesText} 当前：${gameEngine.piles.map((c,i)=>`堆${i+1}=${c}`).join('，')}。请给出最优走法。只回复JSON：{"pile":堆号或-1表示全局,"count":数量}`;
+    // 困难模式且为碎片化Nim或Yet Another时，尝试调用API（带超时和思考过程）
+    if (selectedDifficulty === 'hard' && (rule === 'fragmented-nim' || rule === 'yet-another')) {
+        let rulesText = rule === 'fragmented-nim' ? '碎片化Nim：对手指定堆，你取子。' : 'Yet Another：选一堆减任意或全局减相同值。';
+        const prompt = `${currentProblem.name}。${rulesText} 当前：${gameEngine.piles.map((c,i)=>`堆${i+1}=${c}`).join('，')}。输出JSON：{"pile":堆号或-1,"count":数量}`;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
         try {
-            const res = await fetch(AI_WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
-            const data = await res.json(); const content = data.content||'';
-            const jsonMatch = content.match(/\{[^}]+\}/); if(!jsonMatch)throw new Error('格式错误');
-            const move = JSON.parse(jsonMatch[0]);
-            let pi=move.pile-1, cnt=move.count;
-            if(pi<-1||pi>=gameEngine.piles.length)pi=getMaxPileIndex();
-            cnt=Math.max(1,Math.min(cnt,pi===-1?Math.min(...gameEngine.piles):gameEngine.piles[pi]));
-            executeAiMove(pi,cnt);
-        } catch(e) { fallbackAiMove(); }
+            const res = await fetch(AI_WORKER_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt }),
+                signal: controller.signal
+            });
+            clearTimeout(timeout);
+            const data = await res.json();
+            const content = data.content || '';
+            console.log('AI回复:', content);
+            
+            // 提取分析文本
+            const analysisMatch = content.match(/^([^{]*)/);
+            if (analysisMatch && analysisMatch[1].trim()) {
+                addLog(`💭 AI分析: ${analysisMatch[1].trim()}`);
+            }
+            
+            const jsonMatch = content.match(/\{[^}]+\}/);
+            if (jsonMatch) {
+                const move = JSON.parse(jsonMatch[0]);
+                let pi = move.pile - 1, cnt = move.count;
+                if (pi < -1 || pi >= gameEngine.piles.length) pi = getMaxPileIndex();
+                cnt = Math.max(1, Math.min(cnt, pi === -1 ? Math.min(...gameEngine.piles) : gameEngine.piles[pi]));
+                executeAiMove(pi, cnt);
+                return;
+            }
+        } catch (e) { /* 超时降级 */ }
+        clearTimeout(timeout);
+        fallbackAiMove();
         return;
     }
 
-    if (rule==='bash'){const best=getBashBestMove(); if(best)executeAiMove(best.pileIndex,best.count);else executeAiMove(0,1);}
-    else if(rule==='nim'||rule==='wythoff'){const best=getNimBestMove(); if(best)executeAiMove(best.pileIndex,best.count);else{const idx=getMaxPileIndex();executeAiMove(idx,1);}}
-    else if(rule==='euclid'){const best=getEuclidBestMove();executeAiMoveEuclid(best.k);}
-    else if(rule==='fragmented-nim'||rule==='yet-another'){fallbackAiMove();}
+    // 本地最优策略（包含思考日志）
+    if (rule === 'bash') {
+        const best = getBashBestMove();
+        if (best) {
+            addLog(`💭 AI分析: 取${best.count}个进入必败态`);
+            executeAiMove(best.pileIndex, best.count);
+        } else {
+            addLog('💭 AI分析: 必败态，随便取');
+            executeAiMove(0, 1);
+        }
+    } else if (rule === 'nim' || rule === 'wythoff') {
+        const best = getNimBestMove();
+        if (best) {
+            addLog(`💭 AI分析: 取第${best.pileIndex+1}堆${best.count}个使异或为0`);
+            executeAiMove(best.pileIndex, best.count);
+        } else {
+            addLog('💭 AI分析: 必败态，随便取');
+            executeAiMove(getMaxPileIndex(), 1);
+        }
+    } else if (rule === 'euclid') {
+        const best = getEuclidBestMove();
+        addLog(`💭 AI分析: 减去${best.k}倍`);
+        executeAiMoveEuclid(best.k);
+    } else if (rule === 'fragmented-nim' || rule === 'yet-another') {
+        fallbackAiMove();
+    }
 }
 
 function executeAiMove(pileIndex, count) {
@@ -228,10 +272,10 @@ function executeAiMoveEuclid(k) {
 }
 function fallbackAiMove() {
     const rule=currentProblem.rule;
-    if(rule==='bash'){const best=getBashBestMove();if(best)executeAiMove(best.pileIndex,best.count);else executeAiMove(0,1);}
-    else if(rule==='nim'||rule==='fragmented-nim'){const best=getNimBestMove();if(best)executeAiMove(best.pileIndex,best.count);else{const idx=getMaxPileIndex();executeAiMove(idx,1);}}
-    else if(rule==='euclid'){const best=getEuclidBestMove();executeAiMoveEuclid(best.k);}
-    else if(rule==='yet-another'){const idx=getMaxPileIndex();executeAiMove(idx,1);}
+    if(rule==='bash'){const best=getBashBestMove();if(best){addLog(`💭 AI分析: 取${best.count}个`);executeAiMove(best.pileIndex,best.count);}else{addLog('💭 AI分析: 必败态');executeAiMove(0,1);}}
+    else if(rule==='nim'||rule==='fragmented-nim'){const best=getNimBestMove();if(best){addLog(`💭 AI分析: 取第${best.pileIndex+1}堆${best.count}个`);executeAiMove(best.pileIndex,best.count);}else{addLog('💭 AI分析: 随便取');executeAiMove(getMaxPileIndex(),1);}}
+    else if(rule==='euclid'){const best=getEuclidBestMove();addLog(`💭 AI分析: 减${best.k}倍`);executeAiMoveEuclid(best.k);}
+    else if(rule==='yet-another'){const mn=Math.min(...gameEngine.piles);if(mn>0&&Math.random()<0.6){addLog(`💭 AI分析: 全局减${mn}`);executeAiMove(-1,mn);}else{const idx=getMaxPileIndex();const cnt=Math.floor(Math.random()*gameEngine.piles[idx])+1;addLog(`💭 AI分析: 减第${idx+1}堆${cnt}个`);executeAiMove(idx,cnt);}}
 }
 function afterMove() {
     const winner=gameEngine.checkGameOver();
@@ -244,10 +288,11 @@ function endGameSingle(winner) {
     const isMeWin=winner===1;
     document.getElementById('turn-indicator').textContent=isMeWin?'🎉 你赢了！':'😢 AI 赢了！';
     document.getElementById('game-controls').innerHTML=`<div style="text-align:center;padding:20px;"><h2>${isMeWin?'🎉 恭喜获胜！':'😢 败北！'}</h2><button class="btn-primary" onclick="location.reload()">🔄 再来一局</button></div>`;
+    document.getElementById('room-badge').style.display = 'inline-block';
 }
 function surrender() { if(!gameEngine)return; if(myRoomCode?.startsWith('single-')){endGameSingle(2);addLog('🏳️ 你认输了！');}else{endGame(myPlayerNumber===1?2:1);} }
 
-// ==================== 双人模式（完整） ====================
+// ==================== 双人模式 ====================
 function generateRoomCode(){return Math.random().toString(36).substring(2,8).toUpperCase();}
 async function createRoom(){
     if(!selectedRule){alert('请先选择博弈规则！');return;}
@@ -258,8 +303,7 @@ async function createRoom(){
     if(error){alert('创建房间失败');return;}
     myRoomCode=roomCode;myPlayerNumber=1;currentProblem={...problem,piles};
     document.getElementById('room-lobby').style.display='none';document.getElementById('game-room').style.display='block';
-    document.getElementById('room-badge').textContent = roomCode;
-    document.getElementById('room-badge').style.display = 'inline-block';
+    document.getElementById('room-badge').style.display='inline-block';document.getElementById('room-badge').textContent=roomCode;
     document.getElementById('name-p1').textContent='你 (玩家1)';document.getElementById('name-p2').textContent='等待加入...';
     document.getElementById('game-board').innerHTML='';document.getElementById('game-controls').innerHTML='';
     document.getElementById('turn-indicator').textContent='等待对手加入...';
@@ -277,7 +321,7 @@ async function joinRoom(){
     subscribeToRoom(roomCode);enterGameRoom(roomCode,currentProblem);
 }
 async function subscribeToRoom(roomCode){channel=supabaseClient.channel(`room:${roomCode}`);channel.on('broadcast',{event:'move'},(payload)=>handleRemoteMove(payload.payload)).on('broadcast',{event:'game_over'},(payload)=>endGame(payload.winner)).subscribe();}
-function enterGameRoom(roomCode,problem){document.getElementById('room-badge').style.display = 'inline-block';document.getElementById('room-lobby').style.display='none';document.getElementById('game-room').style.display='block';document.getElementById('room-badge').textContent=roomCode;document.getElementById('name-p1').textContent=myPlayerNumber===1?'你 (玩家1)':'玩家1';document.getElementById('name-p2').textContent=myPlayerNumber===2?'你 (玩家2)':'玩家2';gameEngine=new GameEngine(problem);document.getElementById('room-badge').style.display = 'inline-block';renderBoard();updateTurnDisplay();startTimer();}
+function enterGameRoom(roomCode,problem){document.getElementById('room-lobby').style.display='none';document.getElementById('game-room').style.display='block';document.getElementById('room-badge').style.display='inline-block';document.getElementById('room-badge').textContent=roomCode;document.getElementById('name-p1').textContent=myPlayerNumber===1?'你 (玩家1)':'玩家1';document.getElementById('name-p2').textContent=myPlayerNumber===2?'你 (玩家2)':'玩家2';gameEngine=new GameEngine(problem);renderBoard();updateTurnDisplay();startTimer();}
 function handleRemoteMove(payload){gameEngine.loadState(payload.state);addLog(`玩家${gameEngine.currentPlayer===1?2:1} 从第${payload.pileIndex+1}堆取走${payload.count}个石子`);gameEngine.selectedPile=null;const winner=gameEngine.checkGameOver();if(winner){endGame(winner);return;}gameEngine.switchPlayer();renderBoard();updateTurnDisplay();resetTimer();}
 function endGame(winner){clearInterval(timerInterval);const isMe=winner===myPlayerNumber;document.getElementById('turn-indicator').textContent=isMe?'🎉 你赢了！':'😢 你输了！';document.getElementById('game-controls').innerHTML=`<div style="text-align:center;padding:20px;"><h2>${isMe?'🎉 恭喜获胜！':'😢 败北！'}</h2><button class="btn-primary" onclick="location.reload()">🔄 再来一局</button></div>`;if(channel)channel.send({type:'game_over',payload:{winner}});supabaseClient.from('rooms').update({status:'finished',winner:`player${winner}`}).eq('room_code',myRoomCode);}
 
@@ -361,9 +405,9 @@ function woodAiMove(){setTimeout(()=>{const cands=[];const g=gameEngine.grid;for
 function _renderTreeBoard(board){
     const c=currentProblem;
     board.innerHTML=`<div class="tree-container"><canvas id="tree-canvas" width="600" height="300"></canvas></div>
-        <div class="info-panel"><div class="sub-text">根节点: ${c.root} | 各节点棋子数: [${c.pieces.join(', ')}]</div><div class="sub-text">开局先在节点${c.startNode}放一枚棋子</div></div>`;
-    document.getElementById('game-controls').innerHTML='<div class="info-panel"><div class="sub-text">此题仅展示局面，最佳结果见原题</div></div>';
-    setTimeout(()=>{const canvas=document.getElementById('tree-canvas');if(canvas){treeCanvasCtx=canvas.getContext('2d');_drawTree(c,treeCanvasCtx);}},100);
+        <div class="info-panel"><div class="sub-text">根节点: ${c.root} | 各节点棋子数: [${c.pieces.join(', ')}]</div><div class="sub-text">开局先在节点${c.startNode}放一枚棋子</div><button class="btn-secondary btn-sm" onclick="switchPage('battle')">↩️ 返回</button></div>`;
+    document.getElementById('game-controls').innerHTML='';
+    setTimeout(()=>{const canvas=document.getElementById('tree-canvas');if(canvas){canvas.style.display='block';canvas.style.margin='0 auto';treeCanvasCtx=canvas.getContext('2d');_drawTree(c,treeCanvasCtx);}},100);
 }
 function _drawTree(c,ctx){
     if(!ctx)return;const canvas=ctx.canvas;const n=c.edges.length+1;const pos={};
@@ -374,9 +418,9 @@ function _drawTree(c,ctx){
 }
 function _renderGraphBoard(board){
     const c=currentProblem;
-    board.innerHTML=`<div class="tree-container"><canvas id="graph-canvas" width="600" height="300"></canvas></div><div class="info-panel"><div class="sub-text">Tom(🐱) 起点: ${c.tom} | Jerry(🐭) 起点: ${c.jerry}</div><div class="big-text">${c.answer==='Yes'?'✅ Tom 必胜':'❌ Tom 不胜'}</div></div>`;
-    document.getElementById('game-controls').innerHTML='<div class="info-panel"><div class="sub-text">此题仅展示局面，最佳结果见原题</div></div>';
-    setTimeout(()=>{const canvas=document.getElementById('graph-canvas');if(canvas){graphCanvasCtx=canvas.getContext('2d');_drawGraph(c,graphCanvasCtx);}},100);
+    board.innerHTML=`<div class="tree-container"><canvas id="graph-canvas" width="600" height="300"></canvas></div><div class="info-panel"><div class="sub-text">Tom(🐱) 起点: ${c.tom} | Jerry(🐭) 起点: ${c.jerry}</div><div class="big-text">${c.answer==='Yes'?'✅ Tom 必胜':'❌ Tom 不胜'}</div><button class="btn-secondary btn-sm" onclick="switchPage('battle')">↩️ 返回</button></div>`;
+    document.getElementById('game-controls').innerHTML='';
+    setTimeout(()=>{const canvas=document.getElementById('graph-canvas');if(canvas){canvas.style.display='block';canvas.style.margin='0 auto';graphCanvasCtx=canvas.getContext('2d');_drawGraph(c,graphCanvasCtx);}},100);
 }
 function _drawGraph(c,ctx){
     if(!ctx)return;const canvas=ctx.canvas;const n=c.n;const pos={};
@@ -387,8 +431,8 @@ function _drawGraph(c,ctx){
 }
 function _renderTextInfoBoard(board){
     const c=currentProblem;
-    board.innerHTML=`<div class="info-panel"><div class="sub-text">字符串: <strong style="font-size:22px;letter-spacing:4px;">${c.s}</strong></div><div class="big-text">最佳分数差: ${c.answer}</div></div>`;
-    document.getElementById('game-controls').innerHTML='<div class="info-panel"><div class="sub-text">此题仅展示局面，最佳结果见原题</div></div>';
+    board.innerHTML=`<div class="info-panel"><div class="sub-text">字符串: <strong style="font-size:22px;letter-spacing:4px;">${c.s}</strong></div><div class="big-text">最佳分数差: ${c.answer}</div><button class="btn-secondary btn-sm" onclick="switchPage('battle')">↩️ 返回</button></div>`;
+    document.getElementById('game-controls').innerHTML='';
 }
 
 // ==================== 操作控件 ====================
