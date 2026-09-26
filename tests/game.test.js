@@ -28,6 +28,55 @@ test('状态序列化不会共享棋盘引用', () => {
     assert.equal(game.grid[0][1], 'O');
 });
 
+test('碎片化 Nim 只能从指定堆取，并正确指定下一堆', () => {
+    const game = new GameEngine({ rule: 'fragmented-nim', piles: [2, 3], id: 'fragmented-nim' });
+    assert.equal(game.forcedPile, 0);
+    assert.equal(game.makeMove(1, 1, { nextPile: 0 }), false);
+    assert.equal(game.makeMove(0, 1, { nextPile: 1 }), true);
+    assert.equal(game.forcedPile, 1);
+    assert.deepEqual(game.piles, [1, 3]);
+});
+
+test('兔兔与蛋蛋按下一位玩家无路可走判负', () => {
+    const game = new GameEngine({ rule: 'bunny-egg', board: [['O', '.'], ['O', 'O']], id: 'bunny-egg' });
+    assert.equal(game.makeBunnyMove(0, 0), true);
+    game.switchPlayer();
+    assert.equal(game.checkGameOver(), 1);
+});
+
+test('木棋按双方各自权值累计并允许平局', () => {
+    const game = new GameEngine({ rule: 'wood-chess', n: 1, m: 2, a: [[3, 1]], b: [[2, 3]], id: 'wood-chess' });
+    game.grid = [[null, null]];
+    assert.equal(game.makeWoodMove(0, 0), true);
+    game.switchPlayer();
+    assert.equal(game.makeWoodMove(0, 1), true);
+    assert.deepEqual(game.scores, { p1: 3, p2: 3 });
+    assert.equal(game.checkGameOver(), 0);
+});
+
+test('树上棋子只能向当前根的后代移动', () => {
+    const game = new GameEngine({ rule: 'tree-game', edges: [[1,2],[2,3]], root: 1, pieces: [1,0,0], id: 'tree-game' });
+    assert.deepEqual(game.legalTreeMoves(), [{ from: 1, to: 2 }, { from: 1, to: 3 }]);
+    assert.equal(game.makeTreeMove(1, 3), true);
+    game.switchPlayer();
+    assert.equal(game.checkGameOver(), 1);
+});
+
+test('字符串游戏实际删除前缀并按出现次数计分', () => {
+    const game = new GameEngine({ rule: 'string-game', s: 'ababa', id: 'string-game' });
+    assert.equal(game.prefixOccurrences(1), 3);
+    assert.equal(game.makeStringMove(1), true);
+    assert.equal(game.text, 'baba');
+    assert.equal(game.scores.p1, 3);
+});
+
+test('Tom 抓到 Jerry 与 Jerry 生存轮数的胜负判定', () => {
+    const caught = new GameEngine({ rule: 'tom-jerry', n: 2, edges: [[1,2]], tom: 1, jerry: 2, id: 'tom-jerry' });
+    caught.currentPlayer = 2; assert.equal(caught.makeTomMove(2), true); assert.equal(caught.checkGameOver(), 2);
+    const escaped = new GameEngine({ rule: 'tom-jerry', n: 3, edges: [[1,2],[2,3],[3,1]], tom: 1, jerry: 2, maxRounds: 2, id: 'tom-jerry' });
+    escaped.round = 2; assert.equal(escaped.checkGameOver(), 1);
+});
+
 test('Nim AI 将局面移动到异或和为零', () => {
     const piles = [3, 4, 6], move = GameSolvers.nim(piles);
     assert.ok(move);

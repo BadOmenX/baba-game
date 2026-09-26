@@ -42,7 +42,7 @@ const PROBLEMS = [
         difficulty: 'hard', defaultPiles: [3,5,7], maxTake: null, rule: 'fragmented-nim',
         timeLimit: 60, boardType: 'multi-pile', ai: { style: 'tricky' },
         customizable: true, configLabel: '堆数', configPlaceholder: '堆数',
-        ruleHint: '每回合对手先指定一堆，然后你从该堆取石子（至少1个），取完最后石子者胜。',
+        ruleHint: '从对手指定的堆取至少1个，再指定对手下一回合要取的非空堆。取完最后石子者胜。',
         link: 'https://www.luogu.com.cn/problem/CF2181F', mode: 'interactive'
     },
     {
@@ -62,7 +62,7 @@ const PROBLEMS = [
         timeLimit: 120, boardType: 'grid', ai: { style: 'tricky' },
         customizable: false, configLabel: '', configPlaceholder: '',
         ruleHint: '兔兔(🔴)移白棋⭕到空格，蛋蛋(🔵)移黑棋⬤到空格。空格初始在棋盘某处。无法移动者输。点击棋子移动。',
-        link: 'https://www.luogu.com.cn/problem/P1971', mode: 'challenge',
+        link: 'https://www.luogu.com.cn/problem/P1971', mode: 'interactive',
         randomChallenge: function() {
             const sizes = [[3,3],[3,4],[4,4]];
             const [r,c] = sizes[Math.floor(Math.random()*sizes.length)];
@@ -89,7 +89,7 @@ const PROBLEMS = [
         timeLimit: 120, boardType: 'grid-score', ai: { style: 'tricky' },
         customizable: false, configLabel: '', configPlaceholder: '',
         ruleHint: '落子规则：左方和上方所有格子都已有棋子才可落子。黑方得分=Σa(i,j)，白方得分=Σb(i,j)。最终分数差=黑-白。',
-        link: 'https://www.luogu.com.cn/problem/P4363', mode: 'challenge',
+        link: 'https://www.luogu.com.cn/problem/P4363', mode: 'interactive',
         randomChallenge: function() {
             const n=2+Math.floor(Math.random()*2), m=2+Math.floor(Math.random()*3);
             const a=Array(n).fill().map(()=>Array(m).fill().map(()=>Math.floor(Math.random()*9)+1));
@@ -104,12 +104,12 @@ const PROBLEMS = [
     },
     {
         id: 'tree-game', name: '经典游戏（树上）', icon: '🌳',
-        description: '树上棋子下移，C可换根，K加棋子。预置局面挑战。',
+        description: '树上棋子向根的后代节点移动，无法移动的一方失败。',
         difficulty: 'hard', defaultPiles: [], maxTake: null, rule: 'tree-game',
         timeLimit: 0, boardType: 'tree', ai: { style: 'tricky' },
         customizable: false, configLabel: '', configPlaceholder: '',
-        ruleHint: '树上每个节点有棋子。每次选一个棋子移到其子树内任意节点（不含自身）。无法移动者输。C可选换根。',
-        link: 'https://www.luogu.com.cn/problem/P8994', mode: 'challenge',
+        ruleHint: '每次把一枚棋子移到当前节点的任意后代节点（不含自身）；所有棋子都到叶子、无法移动者输。',
+        link: 'https://www.luogu.com.cn/problem/P8994', mode: 'interactive',
         randomChallenge: function() {
             const n=3+Math.floor(Math.random()*4);
             const edges=[], nodes=[1];
@@ -135,8 +135,8 @@ const PROBLEMS = [
         difficulty: 'hard', defaultPiles: [], maxTake: null, rule: 'tom-jerry',
         timeLimit: 0, boardType: 'graph', ai: { style: 'tricky' },
         customizable: false, configLabel: '', configPlaceholder: '',
-        ruleHint: 'Jerry先走，可走任意多边但不能经过Tom；Tom每次至多走1边。Tom到达Jerry位置即胜。判断Tom能否必胜。',
-        link: 'https://www.luogu.com.cn/problem/P7353', mode: 'challenge',
+        ruleHint: 'Jerry先走，可走到不经过Tom的任意节点；Tom每次至多走1边。Tom抓到Jerry获胜，Jerry坚持12轮获胜。',
+        link: 'https://www.luogu.com.cn/problem/P7353', mode: 'interactive', maxRounds: 12,
         randomChallenge: function() {
             const n=4+Math.floor(Math.random()*5);
             const edges=[], used=new Set();
@@ -170,7 +170,7 @@ const PROBLEMS = [
         timeLimit: 0, boardType: 'text-info', ai: { style: 'tricky' },
         customizable: false, configLabel: '', configPlaceholder: '',
         ruleHint: '每次选一个非空前缀，获得等于该前缀出现次数的分数，然后删去该前缀。字符串为空时结束。最终分数差=先手-后手。',
-        link: 'https://www.luogu.com.cn/problem/P10215', mode: 'challenge',
+        link: 'https://www.luogu.com.cn/problem/P10215', mode: 'interactive',
         randomChallenge: function() {
             const chars='ab';
             const len=4+Math.floor(Math.random()*5);

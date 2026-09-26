@@ -5,33 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>巴巴博弈 - 在线博弈论对战平台</title>
     <link rel="stylesheet" href="css/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body>
+<body data-theme="aurora">
     <div class="bg-gradient"></div>
+    <div class="ambient-orb orb-one"></div><div class="ambient-orb orb-two"></div>
     <header>
-        <div class="logo" onclick="switchPage('home')">🎮 巴巴博弈</div>
+        <div class="logo" onclick="switchPage('home')"><span class="logo-mark">B</span><span>巴巴博弈</span></div>
         <nav>
             <button class="nav-btn active" data-page="home">首页</button>
             <button class="nav-btn" data-page="problems">题库</button>
             <button class="nav-btn" data-page="battle">对战</button>
         </nav>
+        <div class="theme-picker" aria-label="界面风格">
+            <button class="theme-trigger" id="theme-trigger" onclick="cycleTheme()" title="切换界面风格"><span id="theme-icon">✦</span><span id="theme-name">极光</span></button>
+        </div>
     </header>
 
     <main>
         <section id="home" class="page active">
             <div class="hero">
                 <h1>🕹️ 巴巴博弈</h1>
-                <p class="subtitle">棋盘博弈 · Nim变体 · 树上博弈 · 在线实时对战</p>
-                <p class="hero-desc">精选洛谷/CF经典博弈论题目，图形化交互体验</p>
+                <div class="eyebrow"><span class="live-dot"></span> 实时房间已就绪</div>
+                <p class="subtitle">棋盘博弈 · Nim 变体 · 树上博弈 · 在线实时对战</p>
+                <p class="hero-desc">11 种可交互玩法，一人练习或把房间号发给朋友</p>
                 <div class="hero-buttons">
                     <button class="btn-primary btn-lg pulse" onclick="switchPage('battle')">⚔️ 开始对战</button>
                     <button class="btn-secondary btn-lg" onclick="switchPage('problems')">📚 浏览题库</button>
                 </div>
                 <div class="hero-stats">
-                    <div class="stat"><span class="stat-num">9+</span><span class="stat-label">博弈类型</span></div>
-                    <div class="stat"><span class="stat-num">2</span><span class="stat-label">难度等级</span></div>
-                    <div class="stat"><span class="stat-num">∞</span><span class="stat-label">策略空间</span></div>
+                    <div class="stat"><span class="stat-num">11</span><span class="stat-label">可玩规则</span></div>
+                    <div class="stat"><span class="stat-num">2P</span><span class="stat-label">实时联机</span></div>
+                    <div class="stat"><span class="stat-num">3</span><span class="stat-label">视觉风格</span></div>
                 </div>
             </div>
         </section>
@@ -73,7 +77,7 @@
                     </div>
                     <div id="multi-config" class="hidden">
                         <div class="room-actions">
-                            <button class="btn-primary" onclick="createRoom()">🏠 创建房间</button>
+                        <button class="btn-primary" id="create-room-btn" onclick="createRoom()">🏠 创建房间</button>
                             <span class="or-divider">或</span>
                             <div class="join-area">
                                 <input type="text" id="room-code-input" placeholder="输入6位房间号" maxlength="6">
@@ -81,7 +85,7 @@
                             </div>
                         </div>
                     </div>
-                    <button class="btn-primary btn-lg" onclick="startGame()" style="margin-top:20px;">🚀 开始游戏</button>
+                    <button class="btn-primary btn-lg" id="start-game-btn" onclick="startGame()" style="margin-top:20px;">🚀 开始游戏</button>
                 </div>
             </div>
 
@@ -93,8 +97,9 @@
                         <div class="player-timer" id="timer-p1">30</div>
                     </div>
                     <div class="game-info">
-                        <div class="room-badge" id="room-badge">---</div>
+                        <button class="room-badge" id="room-badge" onclick="copyRoomCode()" title="点击复制房间号">---</button>
                         <div class="turn-indicator" id="turn-indicator">等待开始...</div>
+                        <div class="connection-status" id="connection-status"></div>
                         <button class="btn-surrender" onclick="surrender()">🏳️ 认输</button>
                     </div>
                     <div class="player-panel" id="panel-p2">
@@ -114,11 +119,13 @@
         </section>
     </main>
 
-    <footer><p>🐛 巴巴博弈 · BadOmenX · 2026</p></footer>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <footer><p>巴巴博弈 · BadOmenX · 2026</p></footer>
 
     <script src="js/config.js"></script>
     <script src="js/problems.js"></script>
     <script src="js/game.js"></script>
+    <script src="js/multiplayer.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

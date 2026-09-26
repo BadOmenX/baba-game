@@ -1,0 +1,14 @@
+{
+  "name": "baba-game",
+  "version": "2.0.0",
+  "private": true,
+  "description": "博弈论小游戏与 WebSocket 实时房间",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/game.test.js && node tests/server.test.js"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18"
+  }
+}
