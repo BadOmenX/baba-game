@@ -140,18 +140,21 @@ const PROBLEMS = [
         randomChallenge: function() {
             const n=4+Math.floor(Math.random()*5);
             const edges=[], used=new Set();
-            for(let i=0; i<n-1; i++){
-                const u=1+Math.floor(Math.random()*n), v=1+Math.floor(Math.random()*n);
-                if(u!==v && !used.has(`${Math.min(u,v)}-${Math.max(u,v)}`)){
-                    edges.push([u,v]);
-                    used.add(`${Math.min(u,v)}-${Math.max(u,v)}`);
-                }
+            // 先生成一棵树，保证随机图连通，再补少量边。
+            for(let v=2; v<=n; v++){
+                const u=1+Math.floor(Math.random()*(v-1));
+                edges.push([u,v]); used.add(`${u}-${v}`);
             }
-            if(edges.length<2) edges.push([1,2]);
+            const extras=Math.floor(Math.random()*3);
+            for(let i=0; i<extras; i++){
+                const u=1+Math.floor(Math.random()*n), v=1+Math.floor(Math.random()*n);
+                const key=`${Math.min(u,v)}-${Math.max(u,v)}`;
+                if(u!==v&&!used.has(key)){ edges.push([u,v]); used.add(key); }
+            }
             const tom=1+Math.floor(Math.random()*n);
             let jerry;
             do{ jerry=1+Math.floor(Math.random()*n); }while(jerry===tom);
-            const answer= Math.random()<0.5?'Yes':'No';
+            const answer=GameSolvers.tomCanForceWin(n,edges,tom,jerry)?'Yes':'No';
             return { n, edges, tom, jerry, answer, name:`随机图 ${n}节点` };
         },
         challenges: [
@@ -173,12 +176,12 @@ const PROBLEMS = [
             const len=4+Math.floor(Math.random()*5);
             let s='';
             for(let i=0; i<len; i++) s+=chars[Math.floor(Math.random()*chars.length)];
-            return { s, answer: Math.floor(Math.random()*5)+1, name:`随机字符串 "${s}"` };
+            return { s, answer: GameSolvers.stringScore(s), name:`随机字符串 "${s}"` };
         },
         challenges: [
             { name: '例1: ababa', s:'ababa', answer:2 },
-            { name: '例2: aaaaa', s:'aaaaa', answer:5 },
-            { name: '例3: abcabc', s:'abcabc', answer:3 }
+            { name: '例2: aaaaa', s:'aaaaa', answer:3 },
+            { name: '例3: abcabc', s:'abcabc', answer:1 }
         ]
     }
 ];
