@@ -31,10 +31,12 @@ class RoomClient extends EventTarget {
         });
         this.socket.send(JSON.stringify({ type, requestId, ...payload })); return response;
     }
-    async create(problemId, setup, state) {
-        const result = await this.request('create_room', { problemId, setup, state }); this._adopt(result); return result;
+    async create(problemId, setup, state, nickname) {
+        const result = await this.request('create_room', { problemId, setup, state, nickname }); this._adopt(result); return result;
     }
-    async join(roomCode) { const result = await this.request('join_room', { roomCode }); this._adopt(result); return result; }
+    async join(roomCode, nickname) { const result = await this.request('join_room', { roomCode, nickname }); this._adopt(result); return result; }
+    restart(problemId, setup, state) { this.send('restart_game', { problemId, setup, state }); }
+    requestRematch() { this.send('rematch_request'); }
     async resume() {
         const saved = JSON.parse(sessionStorage.getItem('baba-room') || 'null'); if (!saved) return null;
         const result = await this.request('resume_room', saved); this._adopt(result); return result;

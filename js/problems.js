@@ -1,3 +1,12 @@
+function qualityRandom(factory, accept, maxAttempts = 80) {
+    let candidate;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        candidate = factory();
+        if (accept(candidate)) return candidate;
+    }
+    return candidate;
+}
+
 const PROBLEMS = [
     // 基础交互类（保持不变，配置已支持随机）
     {
@@ -64,17 +73,17 @@ const PROBLEMS = [
         ruleHint: '兔兔(🔴)移白棋⭕到空格，蛋蛋(🔵)移黑棋⬤到空格。空格初始在棋盘某处。无法移动者输。点击棋子移动。',
         link: 'https://www.luogu.com.cn/problem/P1971', mode: 'interactive',
         randomChallenge: function() {
-            const sizes = [[3,3],[3,4],[4,4]];
-            const [r,c] = sizes[Math.floor(Math.random()*sizes.length)];
-            const board = Array(r).fill().map(()=>Array(c).fill('X'));
-            const pieces = Math.floor(r*c/2);
-            for(let i=0; i<pieces; i++){
-                const rr=Math.floor(Math.random()*r), cc=Math.floor(Math.random()*c);
-                if(board[rr][cc]==='X') board[rr][cc]='O';
-            }
-            const er=Math.floor(Math.random()*r), ec=Math.floor(Math.random()*c);
-            board[er][ec]='.';
-            return { board, name:`随机 ${r}x${c}` };
+            return qualityRandom(() => {
+                const sizes = [[4,4],[4,5],[5,5]], [r,c] = sizes[Math.floor(Math.random()*sizes.length)];
+                const board = Array.from({ length:r }, (_,row) => Array.from({ length:c }, (_,col) => (row + col + Math.floor(Math.random()*2)) % 2 ? 'O' : 'X'));
+                const er=1+Math.floor(Math.random()*(r-2)), ec=1+Math.floor(Math.random()*(c-2));
+                board[er][ec]='.';
+                const around=[[er-1,ec],[er+1,ec],[er,ec-1],[er,ec+1]];
+                board[around[0][0]][around[0][1]]='O'; board[around[1][0]][around[1][1]]='X';
+                return { board, name:`精选随机 ${r}×${c}` };
+            }, value => {
+                const flat=value.board.flat(); return flat.filter(cell=>cell==='O').length>=5 && flat.filter(cell=>cell==='X').length>=5;
+            });
         },
         challenges: [
             { name: '例1: 3×3 简单', board: [['X','O','.'],['X','O','X'],['O','X','O']] },
@@ -91,10 +100,10 @@ const PROBLEMS = [
         ruleHint: '落子规则：左方和上方所有格子都已有棋子才可落子。黑方得分=Σa(i,j)，白方得分=Σb(i,j)。最终分数差=黑-白。',
         link: 'https://www.luogu.com.cn/problem/P4363', mode: 'interactive',
         randomChallenge: function() {
-            const n=2+Math.floor(Math.random()*2), m=2+Math.floor(Math.random()*3);
-            const a=Array(n).fill().map(()=>Array(m).fill().map(()=>Math.floor(Math.random()*9)+1));
-            const b=Array(n).fill().map(()=>Array(m).fill().map(()=>Math.floor(Math.random()*9)+1));
-            return { n, m, a, b, name:`随机 ${n}x${m}` };
+            const n=3+Math.floor(Math.random()*2), m=3+Math.floor(Math.random()*2);
+            const a=Array(n).fill().map(()=>Array(m).fill().map(()=>Math.floor(Math.random()*12)+1));
+            const b=Array(n).fill().map(()=>Array(m).fill().map(()=>Math.floor(Math.random()*12)+1));
+            return { n, m, a, b, name:`精选随机 ${n}×${m}` };
         },
         challenges: [
             { name: '例1: 2×3', n:2, m:3, a:[[2,7,3],[9,1,2]], b:[[3,7,2],[2,3,1]] },
@@ -111,17 +120,14 @@ const PROBLEMS = [
         ruleHint: '每次把一枚棋子移到当前节点的任意后代节点（不含自身）；所有棋子都到叶子、无法移动者输。',
         link: 'https://www.luogu.com.cn/problem/P8994', mode: 'interactive',
         randomChallenge: function() {
-            const n=3+Math.floor(Math.random()*4);
-            const edges=[], nodes=[1];
-            for(let i=2; i<=n; i++){
-                const parent=nodes[Math.floor(Math.random()*nodes.length)];
-                edges.push([parent,i]);
-                nodes.push(i);
-            }
-            const root=1;
-            const pieces=Array(n).fill().map(()=>Math.floor(Math.random()*3));
-            const startNode=1+Math.floor(Math.random()*n);
-            return { edges, root, pieces, startNode, name:`随机树 ${n}节点` };
+            return qualityRandom(() => {
+                const n=6+Math.floor(Math.random()*4), edges=[];
+                for(let i=2; i<=n; i++) edges.push([1+Math.floor(Math.random()*(i-1)),i]);
+                const parents=new Set(edges.map(edge=>edge[0]));
+                const pieces=Array.from({ length:n }, (_,index) => parents.has(index+1) ? 1+Math.floor(Math.random()*3) : Math.floor(Math.random()*2));
+                const startNode=1+Math.floor(Math.random()*n);
+                return { edges, root:1, pieces, startNode, name:`精选随机树 ${n}节点` };
+            }, value => value.pieces.reduce((sum,n)=>sum+n,0)>=6 && value.edges.filter(([from])=>value.pieces[from-1]>0).length>=4);
         },
         challenges: [
             { name: '例1: 链3', edges:[[1,2],[2,3]], root:1, pieces:[1,2,0], startNode:1 },
@@ -138,24 +144,22 @@ const PROBLEMS = [
         ruleHint: 'Jerry先走，可走到不经过Tom的任意节点；Tom每次至多走1边。Tom抓到Jerry获胜，Jerry坚持12轮获胜。',
         link: 'https://www.luogu.com.cn/problem/P7353', mode: 'interactive', maxRounds: 12,
         randomChallenge: function() {
-            const n=4+Math.floor(Math.random()*5);
-            const edges=[], used=new Set();
-            // 先生成一棵树，保证随机图连通，再补少量边。
-            for(let v=2; v<=n; v++){
-                const u=1+Math.floor(Math.random()*(v-1));
-                edges.push([u,v]); used.add(`${u}-${v}`);
-            }
-            const extras=Math.floor(Math.random()*3);
-            for(let i=0; i<extras; i++){
-                const u=1+Math.floor(Math.random()*n), v=1+Math.floor(Math.random()*n);
-                const key=`${Math.min(u,v)}-${Math.max(u,v)}`;
-                if(u!==v&&!used.has(key)){ edges.push([u,v]); used.add(key); }
-            }
-            const tom=1+Math.floor(Math.random()*n);
-            let jerry;
-            do{ jerry=1+Math.floor(Math.random()*n); }while(jerry===tom);
-            const answer=GameSolvers.tomCanForceWin(n,edges,tom,jerry)?'Yes':'No';
-            return { n, edges, tom, jerry, answer, name:`随机图 ${n}节点` };
+            return qualityRandom(() => {
+                const n=6+Math.floor(Math.random()*4), edges=[], used=new Set();
+                for(let v=2; v<=n; v++){
+                    const u=1+Math.floor(Math.random()*(v-1));
+                    edges.push([u,v]); used.add(`${Math.min(u,v)}-${Math.max(u,v)}`);
+                }
+                const target=n+2+Math.floor(Math.random()*3);
+                while(edges.length<target){
+                    const u=1+Math.floor(Math.random()*n), v=1+Math.floor(Math.random()*n), key=`${Math.min(u,v)}-${Math.max(u,v)}`;
+                    if(u!==v&&!used.has(key)){ edges.push([u,v]); used.add(key); }
+                }
+                const tom=1+Math.floor(Math.random()*n); let jerry;
+                do{ jerry=1+Math.floor(Math.random()*n); }while(jerry===tom || edges.some(([a,b])=>(a===tom&&b===jerry)||(a===jerry&&b===tom)));
+                const answer=GameSolvers.tomCanForceWin(n,edges,tom,jerry)?'Yes':'No';
+                return { n, edges, tom, jerry, answer, name:`精选随机图 ${n}节点` };
+            }, value => value.tom!==value.jerry && value.edges.length>=value.n+2);
         },
         challenges: [
             { name: '例1: 4环', n:4, edges:[[1,2],[2,3],[3,4],[4,1]], tom:1, jerry:3, answer:'No' },
@@ -172,16 +176,43 @@ const PROBLEMS = [
         ruleHint: '每次选一个非空前缀，获得等于该前缀出现次数的分数，然后删去该前缀。字符串为空时结束。最终分数差=先手-后手。',
         link: 'https://www.luogu.com.cn/problem/P10215', mode: 'interactive',
         randomChallenge: function() {
-            const chars='ab';
-            const len=4+Math.floor(Math.random()*5);
-            let s='';
-            for(let i=0; i<len; i++) s+=chars[Math.floor(Math.random()*chars.length)];
-            return { s, answer: GameSolvers.stringScore(s), name:`随机字符串 "${s}"` };
+            return qualityRandom(() => {
+                const chars='abc', len=7+Math.floor(Math.random()*4); let s='';
+                for(let i=0; i<len; i++) s+=chars[Math.floor(Math.random()*chars.length)];
+                return { s, answer: GameSolvers.stringScore(s), name:`精选随机字符串 "${s}"` };
+            }, value => new Set(value.s).size>=2 && Math.max(...[...new Set(value.s)].map(char=>[...value.s].filter(item=>item===char).length))<=value.s.length-2);
         },
         challenges: [
             { name: '例1: ababa', s:'ababa', answer:2 },
             { name: '例2: aaaaa', s:'aaaaa', answer:3 },
             { name: '例3: abcabc', s:'abcabc', answer:1 }
         ]
+    },
+    {
+        id: 'tic-tac-toe', name: '井字棋', icon: '❎',
+        description: '三连成线的经典零和博弈，易上手却很考验预判。',
+        difficulty: 'easy', defaultPiles: [], maxTake: null, rule: 'tic-tac-toe',
+        timeLimit: 30, boardType: 'classic-grid', ai: { style: 'perfect' },
+        customizable: false, configLabel: '', configPlaceholder: '',
+        ruleHint: '双方轮流落下 X 与 O，率先在横、竖或对角线上连成三枚者获胜。',
+        link: 'https://en.wikipedia.org/wiki/Tic-tac-toe', mode: 'interactive', rows: 3, cols: 3
+    },
+    {
+        id: 'connect-four', name: '四子棋', icon: '🔴',
+        description: '从列顶落下棋子，率先横竖斜连成四枚即获胜。',
+        difficulty: 'medium', defaultPiles: [], maxTake: null, rule: 'connect-four',
+        timeLimit: 45, boardType: 'connect-grid', ai: { style: 'tactical' },
+        customizable: false, configLabel: '', configPlaceholder: '',
+        ruleHint: '选择一列落子，棋子会落到最低空位；横、竖或斜向连成四枚即可获胜。',
+        link: 'https://en.wikipedia.org/wiki/Connect_Four', mode: 'interactive', rows: 6, cols: 7
+    },
+    {
+        id: 'chomp', name: 'Chomp 巧克力', icon: '🍫',
+        description: '咬下一格及其右下区域，但吃到左上角毒块的人会输。',
+        difficulty: 'hard', defaultPiles: [], maxTake: null, rule: 'chomp',
+        timeLimit: 45, boardType: 'chomp-grid', ai: { style: 'positional' },
+        customizable: false, configLabel: '', configPlaceholder: '',
+        ruleHint: '每次选择一块巧克力，并吃掉它右下方的所有块；被迫吃下左上角毒块者失败。',
+        link: 'https://en.wikipedia.org/wiki/Chomp', mode: 'interactive', rows: 4, cols: 6
     }
 ];

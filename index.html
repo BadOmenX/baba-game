@@ -27,13 +27,13 @@
                 <h1>🕹️ 巴巴博弈</h1>
                 <div class="eyebrow"><span class="live-dot"></span> 实时房间已就绪</div>
                 <p class="subtitle">棋盘博弈 · Nim 变体 · 树上博弈 · 在线实时对战</p>
-                <p class="hero-desc">11 种可交互玩法，一人练习或把房间号发给朋友</p>
+                <p class="hero-desc">14 种可交互玩法，一人练习或用 4 位房间码邀请朋友</p>
                 <div class="hero-buttons">
                     <button class="btn-primary btn-lg pulse" onclick="switchPage('battle')">⚔️ 开始对战</button>
                     <button class="btn-secondary btn-lg" onclick="switchPage('problems')">📚 浏览题库</button>
                 </div>
                 <div class="hero-stats">
-                    <div class="stat"><span class="stat-num">11</span><span class="stat-label">可玩规则</span></div>
+                    <div class="stat"><span class="stat-num">14</span><span class="stat-label">可玩规则</span></div>
                     <div class="stat"><span class="stat-num">2P</span><span class="stat-label">实时联机</span></div>
                     <div class="stat"><span class="stat-num">3</span><span class="stat-label">视觉风格</span></div>
                 </div>
@@ -55,6 +55,10 @@
                 </div>
                 <div class="setup-step hidden" id="step-config">
                     <h3>⚙️ 对战设置</h3>
+                    <div class="identity-card">
+                        <label for="nickname-input"><span>你的昵称</span><small>会显示在本局对战中</small></label>
+                        <div class="input-shell"><span class="input-icon">✦</span><input type="text" id="nickname-input" maxlength="12" autocomplete="nickname" placeholder="输入 1–12 个字符"></div>
+                    </div>
                     <div class="mode-select">
                         <button class="mode-btn active" data-mode="single" onclick="selectMode('single')">🤖 单人模式</button>
                         <button class="mode-btn" data-mode="multi" onclick="selectMode('multi')">👥 双人对战</button>
@@ -70,19 +74,24 @@
                         <div class="config-row" id="custom-config-row">
                             <label id="config-label">自定义配置：</label>
                             <div class="stone-config">
-                                <input type="text" id="custom-stones" placeholder="留空则随机">
+                                <input type="text" id="custom-stones" inputmode="numeric" placeholder="留空则智能随机">
                                 <button class="btn-secondary btn-sm" onclick="randomStones()">🎲 随机</button>
                             </div>
                         </div>
                     </div>
                     <div id="multi-config" class="hidden">
-                        <div class="room-actions">
-                        <button class="btn-primary" id="create-room-btn" onclick="createRoom()">🏠 创建房间</button>
-                            <span class="or-divider">或</span>
-                            <div class="join-area">
-                                <input type="text" id="room-code-input" placeholder="输入6位房间号" maxlength="6">
-                                <button class="btn-secondary" onclick="joinRoom()">🚪 加入房间</button>
-                            </div>
+                        <div class="room-choice-grid">
+                            <article class="room-choice-card featured">
+                                <span class="room-choice-icon">🏠</span><div><h4>创建新房间</h4><p>生成 4 位房间码，朋友加入后立即开始</p></div>
+                                <button class="btn-primary" id="create-room-btn" onclick="createRoom()">创建并邀请</button>
+                            </article>
+                            <article class="room-choice-card">
+                                <span class="room-choice-icon">🚪</span><div><h4>加入朋友房间</h4><p>输入朋友发来的 4 位数字房间码</p></div>
+                                <div class="join-area">
+                                    <input type="text" id="room-code-input" inputmode="numeric" pattern="[0-9]*" placeholder="0000" maxlength="4" aria-label="4 位房间码">
+                                    <button class="btn-secondary" id="join-room-btn" onclick="joinRoom()">加入</button>
+                                </div>
+                            </article>
                         </div>
                     </div>
                     <button class="btn-primary btn-lg" id="start-game-btn" onclick="startGame()" style="margin-top:20px;">🚀 开始游戏</button>
@@ -120,6 +129,30 @@
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="result-overlay" class="result-overlay" aria-hidden="true">
+        <div class="celebration-field" id="celebration-field"></div>
+        <div class="result-modal" role="dialog" aria-modal="true" aria-labelledby="result-title">
+            <div class="result-glow"></div>
+            <div class="result-emblem" id="result-emblem">🏆</div>
+            <p class="result-kicker" id="result-kicker">本局结算</p>
+            <h2 id="result-title">漂亮的一局！</h2>
+            <p class="result-reason" id="result-reason"></p>
+            <div class="result-stats">
+                <div><strong id="result-moves">0</strong><span>回合数</span></div>
+                <div><strong id="result-rule">—</strong><span>对战规则</span></div>
+            </div>
+            <div id="next-game-actions" class="next-game-actions">
+                <button class="btn-primary btn-lg" id="rematch-btn" onclick="rematchSameRoom()">同房再来一局</button>
+                <button class="btn-secondary" id="change-game-btn" onclick="openGamePicker()">更换玩法</button>
+                <button class="text-button result-close" onclick="closeResult()">留在棋盘复盘</button>
+                <button class="text-button result-exit" onclick="leaveGame()">退出当前房间</button>
+            </div>
+            <div id="room-game-picker" class="room-game-picker hidden">
+                <div class="picker-heading"><button class="picker-back" onclick="closeGamePicker()">←</button><div><h3>下一局玩什么？</h3><p>房间码和玩家都会保留</p></div></div>
+                <div class="mini-rule-grid" id="mini-rule-grid"></div>
+            </div>
+        </div>
+    </div>
     <footer><p>巴巴博弈 · BadOmenX · 2026</p></footer>
 
     <script src="js/config.js"></script>

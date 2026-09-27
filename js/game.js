@@ -2,14 +2,16 @@ class GameEngine {
     constructor(problem) {
         this.problem = problem; this.rule = problem.rule;
         this.piles = [...(problem.piles || problem.defaultPiles || [])];
-        this.currentPlayer = 1; this.moveHistory = []; this.selectedPile = null; this.selectedCell = null;
+        this.currentPlayer = problem.startingPlayer === 2 ? 2 : 1; this.moveHistory = []; this.selectedPile = null; this.selectedCell = null;
         this.grid = problem.board ? problem.board.map(row => [...row]) : null;
+        if (!this.grid && ['tic-tac-toe', 'connect-four'].includes(this.rule)) this.grid = Array.from({ length: problem.rows }, () => Array(problem.cols).fill(null));
+        if (!this.grid && this.rule === 'chomp') this.grid = Array.from({ length: problem.rows }, () => Array(problem.cols).fill(0));
         this.emptyPos = this.grid ? GameEngine.findEmpty(this.grid) : null;
         this.scores = { p1: 0, p2: 0 }; this.finished = false;
         this.forcedPile = this.rule === 'fragmented-nim' ? this.piles.findIndex(value => value > 0) : null;
         this.text = problem.s || '';
         this.tree = problem.edges ? { edges: problem.edges.map(edge => [...edge]), root: problem.root || 1, pieces: [...(problem.pieces || [])] } : null;
-        this.tom = problem.tom || null; this.jerry = problem.jerry || null; this.round = 0; this.maxRounds = problem.maxRounds || 12;
+        this.tom = problem.tom || null; this.jerry = problem.jerry || null; this.round = 0; this.maxRounds = problem.maxRounds || 12; this.poisonedBy = null;
     }
 
     static findEmpty(grid) {
@@ -123,6 +125,38 @@ class GameEngine {
         this.moveHistory.push({ player: this.currentPlayer, type: 'prefix', length, removed, gain, remaining: this.text }); return true;
     }
 
+    makeClassicMove(row, col) {
+        if (this.finished || this.rule !== 'tic-tac-toe' || this.grid?.[row]?.[col] !== null) return false;
+        this.grid[row][col] = this.currentPlayer;
+        this.moveHistory.push({ player: this.currentPlayer, type: 'classic', row, col }); return true;
+    }
+    makeConnectMove(col) {
+        if (this.finished || this.rule !== 'connect-four' || !Number.isInteger(col) || col < 0 || col >= this.problem.cols) return false;
+        for (let row = this.problem.rows - 1; row >= 0; row--) if (this.grid[row][col] === null) {
+            this.grid[row][col] = this.currentPlayer;
+            this.moveHistory.push({ player: this.currentPlayer, type: 'connect', row, col }); return true;
+        }
+        return false;
+    }
+    makeChompMove(row, col) {
+        if (this.finished || this.rule !== 'chomp' || this.grid?.[row]?.[col] !== 0) return false;
+        if (row === 0 && col === 0) this.poisonedBy = this.currentPlayer;
+        for (let r = row; r < this.grid.length; r++) for (let c = col; c < this.grid[r].length; c++) this.grid[r][c] = 3;
+        this.moveHistory.push({ player: this.currentPlayer, type: 'chomp', row, col }); return true;
+    }
+    lineWinner(target) {
+        if (!this.grid) return null;
+        const rows = this.grid.length, cols = this.grid[0].length;
+        for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
+            const player = this.grid[row][col]; if (![1, 2].includes(player)) continue;
+            for (const [dr, dc] of [[0,1],[1,0],[1,1],[1,-1]]) {
+                let count = 1; for (let step = 1; step < target; step++) if (this.grid[row + dr * step]?.[col + dc * step] === player) count++; else break;
+                if (count === target) return player;
+            }
+        }
+        return null;
+    }
+
     checkGameOver() {
         if (['bash', 'nim', 'wythoff', 'fragmented-nim', 'yet-another'].includes(this.rule) && this.piles.every(value => value === 0)) return this.currentPlayer;
         if (this.rule === 'euclid' && this.piles.some(value => value === 0)) return this.currentPlayer;
@@ -131,6 +165,9 @@ class GameEngine {
         if (this.rule === 'wood-chess' && this.woodFull()) return this.scores.p1 === this.scores.p2 ? 0 : this.scores.p1 > this.scores.p2 ? 1 : 2;
         if (this.rule === 'string-game' && !this.text) return this.scores.p1 === this.scores.p2 ? 0 : this.scores.p1 > this.scores.p2 ? 1 : 2;
         if (this.rule === 'tom-jerry') { if (this.tom === this.jerry || this.legalTomMoves(1).length === 0) return 2; if (this.round >= this.maxRounds) return 1; }
+        if (this.rule === 'tic-tac-toe') return this.lineWinner(3) ?? (this.grid.flat().every(cell => cell !== null) ? 0 : null);
+        if (this.rule === 'connect-four') return this.lineWinner(4) ?? (this.grid.flat().every(cell => cell !== null) ? 0 : null);
+        if (this.rule === 'chomp' && this.poisonedBy) return this.poisonedBy === 1 ? 2 : 1;
         return null;
     }
 
@@ -140,7 +177,7 @@ class GameEngine {
             grid: this.grid ? this.grid.map(row => [...row]) : null, emptyPos: this.emptyPos ? [...this.emptyPos] : null,
             scores: { ...this.scores }, selectedPile: this.selectedPile, forcedPile: this.forcedPile, text: this.text,
             tree: this.tree ? { edges: this.tree.edges.map(edge => [...edge]), root: this.tree.root, pieces: [...this.tree.pieces] } : null,
-            tom: this.tom, jerry: this.jerry, round: this.round, maxRounds: this.maxRounds, finished: this.finished };
+            tom: this.tom, jerry: this.jerry, round: this.round, maxRounds: this.maxRounds, poisonedBy: this.poisonedBy, finished: this.finished };
     }
     loadState(state) {
         this.piles = [...(state.piles || [])]; this.currentPlayer = state.currentPlayer === 2 ? 2 : 1;
@@ -150,7 +187,7 @@ class GameEngine {
         this.selectedPile = Number.isInteger(state.selectedPile) ? state.selectedPile : null; this.forcedPile = Number.isInteger(state.forcedPile) ? state.forcedPile : null;
         this.text = typeof state.text === 'string' ? state.text : this.text;
         this.tree = state.tree ? { edges: state.tree.edges.map(edge => [...edge]), root: state.tree.root, pieces: [...state.tree.pieces] } : this.tree;
-        this.tom = state.tom ?? this.tom; this.jerry = state.jerry ?? this.jerry; this.round = Number(state.round) || 0; this.maxRounds = Number(state.maxRounds) || this.maxRounds;
+        this.tom = state.tom ?? this.tom; this.jerry = state.jerry ?? this.jerry; this.round = Number(state.round) || 0; this.maxRounds = Number(state.maxRounds) || this.maxRounds; this.poisonedBy = [1,2].includes(state.poisonedBy) ? state.poisonedBy : null;
         this.finished = Boolean(state.finished);
     }
 }
@@ -177,6 +214,26 @@ const GameSolvers = {
         let bestLength = 1, bestScore = -Infinity; for (let length = 1; length <= value.length; length++) { const score = occurrences(value, value.slice(0, length)) - solve(value.slice(length)); if (score > bestScore) { bestScore = score; bestLength = length; } } return { length: bestLength, score: bestScore };
     },
     stringScore(value) { return this.stringMove(value).score; },
+    ticTacToe(board, player = 2) {
+        const winner = value => {
+            const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]], flat=value.flat();
+            for (const line of lines) if (flat[line[0]] && line.every(index=>flat[index]===flat[line[0]])) return flat[line[0]]; return null;
+        };
+        const minimax = (value, turn, depth) => { const won=winner(value); if(won===player)return 10-depth; if(won)return depth-10; if(value.flat().every(cell=>cell!==null))return 0; const scores=[]; for(let r=0;r<3;r++)for(let c=0;c<3;c++)if(value[r][c]===null){value[r][c]=turn;scores.push(minimax(value,turn===1?2:1,depth+1));value[r][c]=null;} return turn===player?Math.max(...scores):Math.min(...scores); };
+        let best=null,bestScore=-Infinity; for(let r=0;r<3;r++)for(let c=0;c<3;c++)if(board[r][c]===null){board[r][c]=player;const score=minimax(board,player===1?2:1,0);board[r][c]=null;if(score>bestScore){bestScore=score;best={row:r,col:c};}}
+        return best;
+    },
+    connectFour(board, player = 2) {
+        const rows=board.length, cols=board[0].length, other=player===1?2:1, available=()=>Array.from({length:cols},(_,col)=>col).filter(col=>board[0][col]===null);
+        const play=(col,value)=>{for(let row=rows-1;row>=0;row--)if(board[row][col]===null){board[row][col]=value;return row;}return -1;};
+        const wins=value=>{for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)for(const[dr,dc]of[[0,1],[1,0],[1,1],[1,-1]])if(Array.from({length:4},(_,i)=>board[r+dr*i]?.[c+dc*i]).every(cell=>cell===value))return true;return false;};
+        for(const value of [player,other])for(const col of available()){const row=play(col,value),won=wins(value);board[row][col]=null;if(won)return{col};}
+        const choices=available().sort((a,b)=>Math.abs(a-(cols-1)/2)-Math.abs(b-(cols-1)/2)); return choices.length?{col:choices[0]}:null;
+    },
+    chomp(board) {
+        const moves=[]; for(let row=0;row<board.length;row++)for(let col=0;col<board[row].length;col++)if(board[row][col]===0&&(row||col)){let removed=0;for(let r=row;r<board.length;r++)for(let c=col;c<board[r].length;c++)if(board[r][c]===0)removed++;moves.push({row,col,removed});}
+        moves.sort((a,b)=>b.removed-a.removed || (a.row+a.col)-(b.row+b.col)); return moves[0]||{row:0,col:0};
+    },
     tomCanForceWin(n, edges, tom, jerry) {
         const graph = Array.from({ length: n + 1 }, () => []); edges.forEach(([a, b]) => { graph[a].push(b); graph[b].push(a); });
         const id = (turn, t, j) => `${turn}:${t}:${j}`, win = new Set(); for (let t = 1; t <= n; t++) { win.add(id(0, t, t)); win.add(id(1, t, t)); }

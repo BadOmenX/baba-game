@@ -1,12 +1,18 @@
 const roomClient = new RoomClient();
 let currentPage = 'home', currentProblem = null, gameEngine = null;
 let selectedRule = null, selectedMode = 'single', selectedDifficulty = 'normal', customPiles = null;
-let myPlayerNumber = null, myRoomCode = null, timerInterval = null, timeLeft = 0, roomVersion = 0, multiplayerStarted = false;
+let myPlayerNumber = null, myRoomCode = null, timerInterval = null, timeLeft = 0, roomVersion = 0, multiplayerStarted = false, settlementShown = false;
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const isSingle = () => myRoomCode?.startsWith('single-');
 const myTurn = () => Boolean(gameEngine) && (isSingle() ? gameEngine.currentPlayer === 1 : multiplayerStarted && gameEngine.currentPlayer === myPlayerNumber);
+const cleanNickname = value => String(value || '').replace(/[<>\u0000-\u001f]/g, '').trim().slice(0, 12);
+function nickname() {
+    const value = cleanNickname($('#nickname-input')?.value || localStorage.getItem('baba-nickname'));
+    return value || `玩家${String(Math.floor(Math.random() * 900) + 100)}`;
+}
+function saveNickname() { const value = nickname(); localStorage.setItem('baba-nickname', value); if ($('#nickname-input')) $('#nickname-input').value = value; return value; }
 
 function toast(message, type = '') {
     const element = $('#toast'); element.textContent = message; element.className = `toast show ${type}`;
@@ -32,6 +38,8 @@ function switchPage(page) {
     if (page === 'battle' && !gameEngine?.finished && !myRoomCode) initBattlePage();
 }
 $$('.nav-btn').forEach(button => button.addEventListener('click', () => switchPage(button.dataset.page)));
+$('#room-code-input')?.addEventListener('input', event => { event.target.value = event.target.value.replace(/\D/g, '').slice(0, 4); });
+$('#room-code-input')?.addEventListener('keydown', event => { if (event.key === 'Enter') joinRoom(); });
 
 function renderProblems() {
     $('#problem-grid').innerHTML = PROBLEMS.map((problem, index) => `<article class="problem-card reveal" style="--delay:${index * 45}ms">
@@ -43,12 +51,13 @@ function renderProblems() {
 function quickPlay(id) { switchPage('battle'); const card = $(`.rule-card[data-rule="${id}"]`); selectRule(id, card); $('#step-config').scrollIntoView({ behavior: 'smooth' }); }
 
 function resetSession() {
-    clearInterval(timerInterval); roomClient.close(false); gameEngine = null; currentProblem = null; myRoomCode = null; myPlayerNumber = null; multiplayerStarted = false;
+    clearInterval(timerInterval); roomClient.close(false); gameEngine = null; currentProblem = null; myRoomCode = null; myPlayerNumber = null; multiplayerStarted = false; settlementShown = false; closeResult();
 }
 function initBattlePage() {
     clearInterval(timerInterval); selectedRule = null; selectedMode = 'single'; selectedDifficulty = 'normal'; customPiles = null;
     $('#room-lobby').style.display = 'block'; $('#game-room').style.display = 'none'; $('#step-rule').classList.remove('hidden'); $('#step-config').classList.add('hidden');
     $('#custom-stones').value = ''; selectMode('single'); selectDifficulty('normal');
+    $('#nickname-input').value = cleanNickname(localStorage.getItem('baba-nickname'));
     $('#rule-cards').innerHTML = PROBLEMS.map((problem, index) => `<button class="rule-card reveal" data-rule="${problem.id}" style="--delay:${index * 35}ms" onclick="selectRule('${problem.id}',this)">
         <span class="rule-icon">${problem.icon}</span><span class="rule-name">${problem.name}</span><span class="diff diff-${problem.difficulty}">${problem.difficulty === 'easy' ? '简单' : problem.difficulty === 'medium' ? '中等' : '困难'}</span>
     </button>`).join('');
@@ -67,11 +76,11 @@ function selectDifficulty(value) { selectedDifficulty = value; $$('.diff-btn').f
 
 function randomStones() {
     const problem = PROBLEMS.find(item => item.id === selectedRule), input = $('#custom-stones'); if (!problem) return;
-    if (problem.rule === 'bash') input.value = Math.floor(Math.random() * 40) + 10;
-    else if (['nim', 'fragmented-nim'].includes(problem.rule)) input.value = Math.floor(Math.random() * 4) + 2;
-    else if (problem.rule === 'wythoff') input.value = `${Math.floor(Math.random() * 15) + 3}, ${Math.floor(Math.random() * 15) + 3}`;
-    else if (problem.rule === 'euclid') input.value = `${Math.floor(Math.random() * 50) + 10}, ${Math.floor(Math.random() * 20) + 3}`;
-    else if (problem.rule === 'yet-another') input.value = Array.from({ length: Math.floor(Math.random() * 3) + 1 }, () => Math.floor(Math.random() * 10) + 1).join(', ');
+    if (problem.rule === 'bash') input.value = Math.floor(Math.random() * 36) + 20;
+    else if (['nim', 'fragmented-nim'].includes(problem.rule)) input.value = Math.floor(Math.random() * 3) + 4;
+    else if (problem.rule === 'wythoff') input.value = `${Math.floor(Math.random() * 18) + 12}, ${Math.floor(Math.random() * 8) + 4}`;
+    else if (problem.rule === 'euclid') input.value = `${Math.floor(Math.random() * 50) + 35}, ${Math.floor(Math.random() * 16) + 8}`;
+    else if (problem.rule === 'yet-another') input.value = Array.from({ length: 3 }, () => Math.floor(Math.random() * 10) + 3).join(', ');
 }
 function getCustomPiles() {
     const value = $('#custom-stones')?.value.trim(), problem = PROBLEMS.find(item => item.id === selectedRule); if (!value || !problem) return null;
@@ -83,20 +92,23 @@ function getCustomPiles() {
     return null;
 }
 
-function buildProblem(base) {
+function buildProblem(base, useCustom = true) {
     if (typeof base.randomChallenge === 'function') {
-        const challenge = base.randomChallenge(), setup = { ...base, ...challenge }; delete setup.randomChallenge; delete setup.challenges; return setup;
+        const challenge = base.randomChallenge(), setup = { ...base, ...challenge, startingPlayer: Math.random() < .5 ? 1 : 2 }; delete setup.randomChallenge; delete setup.challenges; return setup;
     }
-    let piles = getCustomPiles();
+    let piles = useCustom ? getCustomPiles() : null;
     if (!piles) {
-        if (base.rule === 'bash') piles = [Math.floor(Math.random() * 35) + 12];
-        else if (['nim', 'fragmented-nim'].includes(base.rule)) piles = Array.from({ length: Math.floor(Math.random() * 3) + 3 }, () => Math.floor(Math.random() * 9) + 2);
-        else if (base.rule === 'wythoff') piles = [Math.floor(Math.random() * 15) + 3, Math.floor(Math.random() * 15) + 3];
-        else if (base.rule === 'euclid') piles = [Math.floor(Math.random() * 45) + 12, Math.floor(Math.random() * 12) + 3].sort((a, b) => b - a);
-        else if (base.rule === 'yet-another') piles = Array.from({ length: Math.floor(Math.random() * 3) + 1 }, () => Math.floor(Math.random() * 8) + 1);
+        if (base.rule === 'bash') piles = [Math.floor(Math.random() * 36) + 20];
+        else if (['nim', 'fragmented-nim'].includes(base.rule)) {
+            do { piles = Array.from({ length: Math.floor(Math.random() * 3) + 4 }, () => Math.floor(Math.random() * 13) + 3); }
+            while (new Set(piles).size < 3 || piles.reduce((sum, value) => sum + value, 0) < 30);
+        }
+        else if (base.rule === 'wythoff') { let small=4+Math.floor(Math.random()*12), large=small+3+Math.floor(Math.random()*18); piles=[large,small]; }
+        else if (base.rule === 'euclid') { let small=8+Math.floor(Math.random()*18), large=small*2+3+Math.floor(Math.random()*35); piles=[large,small]; }
+        else if (base.rule === 'yet-another') piles = Array.from({ length: 3 }, () => Math.floor(Math.random() * 10) + 3);
         else piles = [...(base.defaultPiles || [])];
     }
-    const setup = { ...base, piles }; delete setup.randomChallenge; delete setup.challenges; return setup;
+    const setup = { ...base, piles, startingPlayer: Math.random() < .5 ? 1 : 2 }; delete setup.randomChallenge; delete setup.challenges; return setup;
 }
 function createEngine(problem) {
     const engine = new GameEngine(problem);
@@ -107,47 +119,60 @@ function createEngine(problem) {
 function startGame() { if (!selectedRule) return toast('请先选择一个规则', 'error'); startSinglePlayer(); }
 function startSinglePlayer() {
     const base = PROBLEMS.find(item => item.id === selectedRule); if (!base) return;
-    currentProblem = buildProblem(base); gameEngine = createEngine(currentProblem); myRoomCode = `single-${Date.now()}`; myPlayerNumber = 1; openGameRoom();
+    const playerName = saveNickname(); currentProblem = buildProblem(base); gameEngine = createEngine(currentProblem); myRoomCode = `single-${Date.now()}`; myPlayerNumber = 1; roomClient.room = { names: [playerName, '策略 AI'] }; openGameRoom();
     $('#room-badge').textContent = selectedDifficulty === 'hard' ? '单人 · 困难' : '单人 · 普通';
-    addLog(`【${currentProblem.name}】开始，你是玩家1。`); beginTurn();
+    addLog(`【${currentProblem.name}】开始，${gameEngine.currentPlayer === 1 ? playerName : '策略 AI'} 随机成为先手。`); beginTurn();
 }
 
 function openGameRoom(waiting = false) {
     $('#room-lobby').style.display = 'none'; $('#game-room').style.display = 'block'; $('#log-list').innerHTML = '';
-    $('#name-p1').textContent = myPlayerNumber === 1 ? '你 · 玩家1' : '玩家1'; $('#name-p2').textContent = isSingle() ? 'AI · 玩家2' : myPlayerNumber === 2 ? '你 · 玩家2' : waiting ? '等待加入…' : '玩家2';
+    const names = roomClient.room?.names || [myPlayerNumber === 1 ? nickname() : '玩家1', isSingle() ? '策略 AI' : waiting ? '等待加入…' : '玩家2'];
+    $('#name-p1').textContent = `${names[0] || '玩家1'}${myPlayerNumber === 1 ? ' · 你' : ''}`; $('#name-p2').textContent = `${names[1] || (waiting ? '等待加入…' : '玩家2')}${myPlayerNumber === 2 ? ' · 你' : ''}`;
     $('#rule-hint').textContent = `玩法 · ${currentProblem.ruleHint || currentProblem.description}`; $('#room-badge').style.display = 'inline-flex'; if (isSingle()) $('#connection-status').textContent = '';
-    if (waiting) $('#timer-p1').textContent = $('#timer-p2').textContent = '--';
-    renderBoard(); updateTurnDisplay();
+    if (waiting) { $('#timer-p1').textContent = $('#timer-p2').textContent = '--'; renderWaitingRoom(); }
+    else renderBoard();
+    updateTurnDisplay();
+}
+function renderWaitingRoom() {
+    $('#game-board').innerHTML = `<div class="waiting-room-card"><span class="waiting-room-icon">✦</span><p>你的房间码</p><button class="waiting-code" onclick="copyRoomCode()">${escapeHtml(myRoomCode)}</button><h3>正在等待朋友加入</h3><p class="waiting-copy">朋友选择“双人对战”，输入上方 4 位数字即可加入</p><div class="waiting-actions"><button class="btn-primary" onclick="copyInvitation()">复制邀请信息</button><button class="btn-secondary" onclick="leaveGame()">取消房间</button></div><div class="waiting-pulse"><i></i><span>房间保持在线</span></div></div>`;
+    $('#game-controls').innerHTML = `<div class="room-preview"><span>${currentProblem.icon}</span><div><small>本局玩法</small><strong>${escapeHtml(currentProblem.name)}</strong></div></div>`;
 }
 
 async function createRoom() {
     if (!selectedRule) return toast('请先选择一个规则', 'error');
     const button = $('#create-room-btn'); button.disabled = true; button.textContent = '正在创建…';
     try {
-        currentProblem = buildProblem(PROBLEMS.find(item => item.id === selectedRule)); gameEngine = createEngine(currentProblem);
-        const result = await roomClient.create(selectedRule, currentProblem, gameEngine.getState());
+        const playerName = saveNickname(); currentProblem = buildProblem(PROBLEMS.find(item => item.id === selectedRule)); gameEngine = createEngine(currentProblem);
+        const result = await roomClient.create(selectedRule, currentProblem, gameEngine.getState(), playerName);
         myPlayerNumber = 1; myRoomCode = result.room.roomCode; roomVersion = result.room.version; multiplayerStarted = false;
         openGameRoom(true); $('#room-badge').textContent = myRoomCode; $('#turn-indicator').textContent = '等待朋友加入房间…'; $('#connection-status').textContent = '● 已连接';
         addLog(`房间 ${myRoomCode} 已创建，点击房间号即可复制。`); clearInterval(timerInterval); $('#timer-p1').textContent = $('#timer-p2').textContent = '--';
     } catch (error) { toast(error.message, 'error'); }
-    finally { button.disabled = false; button.textContent = '🏠 创建房间'; }
+    finally { button.disabled = false; button.textContent = '创建并邀请'; }
 }
 async function joinRoom() {
-    const roomCode = $('#room-code-input').value.trim().toUpperCase(); if (!/^[A-Z0-9]{6}$/.test(roomCode)) return toast('请输入6位房间号', 'error');
+    const roomCode = $('#room-code-input').value.trim(); if (!/^\d{4}$/.test(roomCode)) return toast('请输入 4 位数字房间码', 'error');
+    const button = $('#join-room-btn'); button.disabled = true; button.textContent = '加入中…';
     try {
-        const result = await roomClient.join(roomCode); myPlayerNumber = 2; myRoomCode = roomCode; roomVersion = result.room.version; multiplayerStarted = true;
+        const result = await roomClient.join(roomCode, saveNickname()); myPlayerNumber = 2; myRoomCode = roomCode; roomVersion = result.room.version; multiplayerStarted = true;
         currentProblem = result.room.setup; gameEngine = createEngine(currentProblem); gameEngine.loadState(result.room.state);
         openGameRoom(); $('#room-badge').textContent = roomCode; $('#connection-status').textContent = '● 双方在线'; addLog('成功加入房间，对局开始。'); beginTurn();
     } catch (error) { toast(error.message, 'error'); }
+    finally { button.disabled = false; button.textContent = '加入'; }
 }
 function copyRoomCode() {
     if (!myRoomCode || isSingle()) return;
     navigator.clipboard?.writeText(myRoomCode).then(() => toast(`房间号 ${myRoomCode} 已复制`)).catch(() => toast(`房间号：${myRoomCode}`));
 }
+function copyInvitation() {
+    if (!myRoomCode || isSingle()) return;
+    const text = `来「巴巴博弈」和我对战！房间码：${myRoomCode}，玩法：${currentProblem.name}`;
+    navigator.clipboard?.writeText(text).then(() => toast('邀请信息已复制，发给朋友即可')).catch(() => toast(`房间码：${myRoomCode}`));
+}
 
 roomClient.addEventListener('player_joined', event => {
-    roomVersion = event.detail.room.version; multiplayerStarted = true; $('#name-p2').textContent = '玩家2'; $('#connection-status').textContent = '● 双方在线';
-    addLog('玩家2已加入，对局开始。'); beginTurn();
+    roomVersion = event.detail.room.version; multiplayerStarted = true; $('#name-p1').textContent = `${event.detail.room.names[0]} · 你`; $('#name-p2').textContent = event.detail.room.names[1]; $('#connection-status').textContent = '● 双方在线';
+    addLog(`${event.detail.room.names[1]} 已加入，${gameEngine.currentPlayer === 1 ? event.detail.room.names[0] : event.detail.room.names[1]} 随机成为先手。`); beginTurn();
 });
 roomClient.addEventListener('state_updated', event => {
     const message = event.detail; roomVersion = message.room.version; gameEngine.loadState(message.room.state); if (message.playerNumber !== myPlayerNumber) addLog(message.description || `玩家${message.playerNumber}完成操作`);
@@ -155,6 +180,16 @@ roomClient.addEventListener('state_updated', event => {
 });
 roomClient.addEventListener('state_conflict', event => { roomVersion = event.detail.room.version; gameEngine.loadState(event.detail.room.state); renderBoard(); toast('状态已刷新，请重新操作'); });
 roomClient.addEventListener('game_finished', event => { roomVersion = event.detail.room.version; gameEngine.loadState(event.detail.room.state); showResult(event.detail.winner, event.detail.reason); });
+roomClient.addEventListener('game_restarted', event => {
+    const room = event.detail.room; roomVersion = room.version; multiplayerStarted = true; settlementShown = false;
+    currentProblem = room.setup; gameEngine = createEngine(currentProblem); gameEngine.loadState(room.state);
+    closeGamePicker(); closeResult(); openGameRoom(); $('#room-badge').textContent = myRoomCode; $('#connection-status').textContent = '● 同房新局';
+    addLog(`【${currentProblem.name}】新一局开始，${room.names[gameEngine.currentPlayer - 1]} 随机成为先手。`); beginTurn();
+});
+roomClient.addEventListener('rematch_requested', event => {
+    const message = `${event.detail.playerName || '对手'} 想再来一局`;
+    toast(message); $('#result-reason').textContent = `${message}，你可以直接重开或选择新玩法。`; showResultOverlay();
+});
 roomClient.addEventListener('presence', event => { $('#connection-status').textContent = event.detail.connected ? '● 对手已重连' : '○ 对手暂时离线'; addLog(event.detail.connected ? '对手已重新连接。' : '对手连接中断，仍可等待其重连。'); });
 roomClient.addEventListener('connection', () => { if (myRoomCode && !isSingle()) $('#connection-status').textContent = '○ 连接已断开'; });
 
@@ -178,13 +213,46 @@ function finishGame(winner, reason = '') {
     showResult(winner, reason);
 }
 function showResult(winner, reason = '') {
-    if (!gameEngine) return; gameEngine.finished = true; clearInterval(timerInterval);
+    if (!gameEngine || settlementShown) return; settlementShown = true; gameEngine.finished = true; clearInterval(timerInterval);
     const tie = winner === 0, mine = winner === myPlayerNumber;
     $('#turn-indicator').textContent = tie ? '🤝 平局' : mine ? '🎉 你赢了！' : '本局结束';
-    $('#game-controls').innerHTML = `<div class="result-card pop-in"><div class="result-icon">${tie ? '🤝' : mine ? '🏆' : '🎯'}</div><h2>${tie ? '势均力敌' : mine ? '漂亮的一局！' : isSingle() ? 'AI 赢下本局' : `玩家${winner}获胜`}</h2>${reason ? `<p>${escapeHtml(reason)}</p>` : ''}<button class="btn-primary" onclick="leaveGame()">再来一局</button></div>`;
+    const names = roomClient.room?.names || [nickname(), '策略 AI'], title = tie ? '势均力敌' : mine ? '漂亮的一局！' : `${names[winner - 1] || `玩家${winner}`} 赢下本局`;
+    $('#game-controls').innerHTML = `<div class="result-card pop-in"><div class="result-icon">${tie ? '🤝' : mine ? '🏆' : '🎯'}</div><h2>${title}</h2><button class="btn-primary" onclick="showResultOverlay()">查看结算</button></div>`;
+    $('#result-emblem').textContent = tie ? '🤝' : mine ? '🏆' : '⚔️'; $('#result-kicker').textContent = tie ? '本局平局' : mine ? '胜利时刻' : '精彩对局'; $('#result-title').textContent = title;
+    $('#result-reason').textContent = reason || (tie ? '双方都没有留下破绽' : `${names[winner - 1] || `玩家${winner}`} 把握住了关键回合`); $('#result-moves').textContent = gameEngine.moveHistory.length; $('#result-rule').textContent = currentProblem.name;
+    const rematchButton = $('#rematch-btn'), changeButton = $('#change-game-btn'); rematchButton.disabled = false; changeButton.disabled = false;
+    rematchButton.textContent = !isSingle() && myPlayerNumber === 2 ? '请求同房再来一局' : '同房再来一局';
+    changeButton.textContent = !isSingle() && myPlayerNumber === 2 ? '请房主更换玩法' : '更换玩法'; closeGamePicker();
+    createCelebration(tie ? 'tie' : mine ? 'win' : 'finish'); showResultOverlay();
     addLog(tie ? '本局平局。' : `玩家${winner}获胜。`);
 }
-function leaveGame() { roomClient.close(true); resetSession(); switchPage('battle'); initBattlePage(); }
+function createCelebration(kind) { const field=$('#celebration-field'); field.innerHTML=''; const colors=kind==='win'?['#55e6c1','#7c70ff','#ffd166','#ff6b9d']:['#7c70ff','#49c6e5','#f5a65b']; for(let i=0;i<72;i++){const piece=document.createElement('i'); piece.className=`confetti-piece ${i%5===0?'spark':''}`; piece.style.setProperty('--x',`${Math.random()*100}vw`); piece.style.setProperty('--delay',`${Math.random()*1.2}s`); piece.style.setProperty('--duration',`${2.2+Math.random()*2.2}s`); piece.style.setProperty('--drift',`${Math.random()*180-90}px`); piece.style.setProperty('--color',colors[i%colors.length]); field.appendChild(piece);} }
+function showResultOverlay() { const overlay=$('#result-overlay'); overlay.classList.add('show'); overlay.setAttribute('aria-hidden','false'); }
+function closeResult() { const overlay=$('#result-overlay'); if(!overlay)return; overlay.classList.remove('show'); overlay.setAttribute('aria-hidden','true'); }
+function leaveGame() { closeResult(); roomClient.close(true); resetSession(); switchPage('battle'); initBattlePage(); }
+function rematchSameRoom() {
+    if (!gameEngine?.finished) return;
+    if (!isSingle() && myPlayerNumber === 2) {
+        roomClient.requestRematch(); const button=$('#rematch-btn'); button.disabled=true; button.textContent='已发送请求 · 等待房主'; toast('已向房主发送再来一局请求'); return;
+    }
+    restartWithRule(currentProblem.id);
+}
+function openGamePicker() {
+    if (!isSingle() && myPlayerNumber === 2) { roomClient.requestRematch(); $('#change-game-btn').disabled=true; $('#change-game-btn').textContent='已通知房主'; toast('已请房主选择下一局玩法'); return; }
+    $('#next-game-actions').classList.add('hidden'); $('#room-game-picker').classList.remove('hidden');
+    $('#mini-rule-grid').innerHTML = PROBLEMS.map(problem => `<button onclick="restartWithRule('${problem.id}')"><span>${problem.icon}</span><b>${escapeHtml(problem.name)}</b></button>`).join('');
+}
+function closeGamePicker() { $('#room-game-picker')?.classList.add('hidden'); $('#next-game-actions')?.classList.remove('hidden'); }
+function restartWithRule(ruleId) {
+    const base=PROBLEMS.find(problem=>problem.id===ruleId); if(!base)return;
+    const nextProblem=buildProblem(base, false), nextEngine=createEngine(nextProblem);
+    $('#rematch-btn').disabled=true; $('#change-game-btn').disabled=true;
+    if (isSingle()) {
+        currentProblem=nextProblem; gameEngine=nextEngine; settlementShown=false; closeGamePicker(); closeResult(); openGameRoom();
+        $('#room-badge').textContent=selectedDifficulty==='hard'?'单人 · 困难':'单人 · 普通'; addLog(`【${currentProblem.name}】新一局开始，${gameEngine.currentPlayer===1?nickname():'策略 AI'} 随机成为先手。`); beginTurn(); return;
+    }
+    roomClient.restart(ruleId,nextProblem,nextEngine.getState()); toast('正在为双方准备新一局…');
+}
 function surrender() {
     if (!gameEngine || gameEngine.finished) return; const winner = gameEngine.currentPlayer === myPlayerNumber || isSingle() ? (myPlayerNumber === 1 ? 2 : 1) : gameEngine.currentPlayer;
     finishGame(winner, `玩家${myPlayerNumber || 1}认输`);
@@ -198,6 +266,9 @@ function renderBoard() {
     else if (type === 'tree') renderTree(board);
     else if (type === 'graph') renderGraph(board);
     else if (type === 'text-info') renderString(board);
+    else if (type === 'classic-grid') renderClassic(board);
+    else if (type === 'connect-grid') renderConnect(board);
+    else if (type === 'chomp-grid') renderChomp(board);
     else renderPiles(board);
 }
 function stones(amount, limit = 22) { return `${Array.from({ length: Math.min(amount, limit) }, () => '<i class="stone"></i>').join('')}${amount > limit ? `<span class="stone-more">+${amount - limit}</span>` : ''}`; }
@@ -240,6 +311,19 @@ function renderString(board) {
     $('#game-controls').innerHTML = myTurn() ? `<div class="prefix-grid">${Array.from({ length: gameEngine.text.length }, (_, index) => { const length = index + 1; return `<button class="prefix-button" onclick="playPrefix(${length})"><span>${escapeHtml(gameEngine.text.slice(0, length))}</span><small>+${gameEngine.prefixOccurrences(length)}</small></button>`; }).join('')}</div>` : '<div class="waiting-overlay">等待对手选择前缀…</div>';
 }
 
+function renderClassic(board) {
+    board.innerHTML = `<div class="classic-board tic-board">${gameEngine.grid.flatMap((row,r)=>row.map((cell,c)=>`<button class="classic-cell mark-${cell || 0}" onclick="clickClassic(${r},${c})" ${cell !== null || !myTurn() ? 'disabled' : ''}>${cell===1?'X':cell===2?'O':''}</button>`)).join('')}</div>`;
+    $('#game-controls').innerHTML = `<div class="waiting-overlay">${myTurn() ? '选择空格落子，连成三枚即可获胜' : '等待对手落子…'}</div>`;
+}
+function renderConnect(board) {
+    board.innerHTML = `<div class="connect-wrap"><div class="column-actions">${Array.from({length:currentProblem.cols},(_,col)=>`<button onclick="clickConnect(${col})" ${!myTurn() || gameEngine.grid[0][col] !== null ? 'disabled' : ''} aria-label="在第 ${col+1} 列落子">↓</button>`).join('')}</div><div class="classic-board connect-board">${gameEngine.grid.flatMap(row=>row.map(cell=>`<span class="connect-slot mark-${cell || 0}">${cell ? '<i></i>' : ''}</span>`)).join('')}</div></div>`;
+    $('#game-controls').innerHTML = `<div class="waiting-overlay">${myTurn() ? '点击棋盘上方箭头选择落子列' : '等待对手落子…'}</div>`;
+}
+function renderChomp(board) {
+    board.innerHTML = `<div class="chomp-board">${gameEngine.grid.flatMap((row,r)=>row.map((cell,c)=>`<button class="chomp-cell ${cell===3?'eaten':''} ${r===0&&c===0?'poison':''}" onclick="clickChomp(${r},${c})" ${cell!==0 || !myTurn() ? 'disabled' : ''}><span>${r===0&&c===0?'☠':'◆'}</span></button>`)).join('')}</div>`;
+    $('#game-controls').innerHTML = `<div class="waiting-overlay">${myTurn() ? '选择一格，右下区域会被一同吃掉；避开毒块' : '等待对手选择巧克力…'}</div>`;
+}
+
 function renderControls() {
     const controls = $('#game-controls'); if (!myTurn()) { controls.innerHTML = `<div class="waiting-overlay">${isSingle() ? 'AI 正在思考…' : '等待对手出手…'}</div>`; return; }
     const rule = currentProblem.rule;
@@ -274,6 +358,9 @@ function clickTreeNode(node) {
 }
 function clickGraphNode(node) { if (!myTurn() || !gameEngine.makeTomMove(node)) return; const role = gameEngine.currentPlayer === 1 ? 'Jerry' : 'Tom', text = `${role} 移动到节点${node}`; addLog(text); finishTurn(text); }
 function playPrefix(length) { if (!myTurn()) return; const gain = gameEngine.prefixOccurrences(length); if (!gameEngine.makeStringMove(length)) return; const text = `玩家${gameEngine.currentPlayer} 删除长度${length}的前缀，获得${gain}分`; addLog(text); finishTurn(text); }
+function clickClassic(row,col) { if(!myTurn() || !gameEngine.makeClassicMove(row,col))return; const text=`玩家${gameEngine.currentPlayer} 在第 ${row+1} 行第 ${col+1} 列落子`; addLog(text); finishTurn(text); }
+function clickConnect(col) { if(!myTurn() || !gameEngine.makeConnectMove(col))return; const text=`玩家${gameEngine.currentPlayer} 在第 ${col+1} 列落子`; addLog(text); finishTurn(text); }
+function clickChomp(row,col) { if(!myTurn() || !gameEngine.makeChompMove(row,col))return; const text=row===0&&col===0?`玩家${gameEngine.currentPlayer} 吃到了毒块`:`玩家${gameEngine.currentPlayer} 咬下第 ${row+1} 行第 ${col+1} 列`; addLog(text); finishTurn(text); }
 
 function aiMove() {
     if (!gameEngine || gameEngine.finished || gameEngine.currentPlayer !== 2) return;
@@ -287,8 +374,14 @@ function aiMove() {
         else if (rule === 'tree-game') { const moves = gameEngine.legalTreeMoves(), move = selectedDifficulty === 'hard' ? moves.at(-1) : moves[Math.floor(Math.random() * moves.length)]; if (move) gameEngine.makeTreeMove(move.from, move.to); finishTurn(`AI 将棋子移到节点${move?.to}`); }
         else if (rule === 'tom-jerry') aiTom();
         else if (rule === 'string-game') { const length = selectedDifficulty === 'hard' ? GameSolvers.stringMove(gameEngine.text).length : Math.floor(Math.random() * gameEngine.text.length) + 1; const gain = gameEngine.prefixOccurrences(length); gameEngine.makeStringMove(length); finishTurn(`AI 删除长度${length}的前缀，获得${gain}分`); }
+        else if (rule === 'tic-tac-toe') { const move=selectedDifficulty==='hard'?GameSolvers.ticTacToe(gameEngine.grid):randomEmptyCell(); if(move)gameEngine.makeClassicMove(move.row,move.col); finishTurn(`AI 在第 ${move.row+1} 行第 ${move.col+1} 列落子`); }
+        else if (rule === 'connect-four') { const move=selectedDifficulty==='hard'?GameSolvers.connectFour(gameEngine.grid):{col:randomAvailableColumn()}; if(move&&Number.isInteger(move.col))gameEngine.makeConnectMove(move.col); finishTurn(`AI 在第 ${move.col+1} 列落子`); }
+        else if (rule === 'chomp') { const move=selectedDifficulty==='hard'?GameSolvers.chomp(gameEngine.grid):randomChompMove(); gameEngine.makeChompMove(move.row,move.col); finishTurn(move.row||move.col?'AI 咬下一片巧克力':'AI 吃到了毒块'); }
     }, 520);
 }
+function randomEmptyCell(){const cells=[];gameEngine.grid.forEach((row,r)=>row.forEach((cell,c)=>{if(cell===null)cells.push({row:r,col:c});}));return cells[Math.floor(Math.random()*cells.length)];}
+function randomAvailableColumn(){const columns=gameEngine.grid[0].map((cell,index)=>cell===null?index:null).filter(Number.isInteger);return columns[Math.floor(Math.random()*columns.length)];}
+function randomChompMove(){const cells=[];gameEngine.grid.forEach((row,r)=>row.forEach((cell,c)=>{if(cell===0&&(r||c))cells.push({row:r,col:c});}));return cells[Math.floor(Math.random()*cells.length)]||{row:0,col:0};}
 function aiPileMove() {
     const rule = currentProblem.rule; let move;
     if (rule === 'bash') { const remainder = gameEngine.piles[0] % (currentProblem.maxTake + 1); move = { pileIndex: 0, count: remainder || 1 }; }

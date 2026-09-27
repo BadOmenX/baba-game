@@ -106,14 +106,46 @@ test('Tom & Jerry 示例结论正确', () => {
     assert.equal(GameSolvers.tomCanForceWin(5, [[1,2],[1,3],[1,4],[1,5]], 2, 4), true);
 });
 
+test('随机先手被游戏引擎正确采用', () => {
+    assert.equal(new GameEngine({ rule: 'bash', piles: [20], startingPlayer: 2 }).currentPlayer, 2);
+});
+
+test('井字棋识别三连与平局，AI 返回合法格', () => {
+    const game = new GameEngine({ rule: 'tic-tac-toe', rows: 3, cols: 3, id: 'tic-tac-toe' });
+    game.grid = [[1,1,null],[2,2,null],[null,null,null]];
+    const move = GameSolvers.ticTacToe(game.grid, 2); assert.deepEqual(move, { row: 1, col: 2 });
+    game.currentPlayer = 1; assert.equal(game.makeClassicMove(0, 2), true); assert.equal(game.checkGameOver(), 1);
+});
+
+test('四子棋遵守重力并识别纵向四连', () => {
+    const game = new GameEngine({ rule: 'connect-four', rows: 6, cols: 7, id: 'connect-four' });
+    for (let i = 0; i < 4; i++) assert.equal(game.makeConnectMove(3), true);
+    assert.equal(game.grid[2][3], 1); assert.equal(game.checkGameOver(), 1);
+});
+
+test('Chomp 吃掉右下区域且毒块使当前玩家失败', () => {
+    const game = new GameEngine({ rule: 'chomp', rows: 4, cols: 6, id: 'chomp' });
+    assert.equal(game.makeChompMove(2, 3), true); assert.equal(game.grid[3][5], 3); assert.equal(game.grid[1][5], 0);
+    game.switchPlayer(); assert.equal(game.makeChompMove(0, 0), true); assert.equal(game.checkGameOver(), 1);
+});
+
 test('随机挑战答案由求解器生成', () => {
     const context = { GameSolvers };
     vm.createContext(context);
     vm.runInContext(`${fs.readFileSync(require.resolve('../js/problems.js'), 'utf8')}\nthis.list=PROBLEMS;`, context);
+    assert.equal(context.list.length, 14);
     const graph = context.list.find(problem => problem.id === 'tom-jerry').randomChallenge();
     assert.equal(graph.answer, GameSolvers.tomCanForceWin(graph.n, graph.edges, graph.tom, graph.jerry) ? 'Yes' : 'No');
     const string = context.list.find(problem => problem.id === 'string-game').randomChallenge();
     assert.equal(string.answer, GameSolvers.stringScore(string.s));
+    for (let round = 0; round < 20; round++) {
+        const bunny = context.list.find(problem => problem.id === 'bunny-egg').randomChallenge(), flat = bunny.board.flat();
+        assert.ok(flat.filter(cell => cell === 'O').length >= 5 && flat.filter(cell => cell === 'X').length >= 5);
+        const tree = context.list.find(problem => problem.id === 'tree-game').randomChallenge();
+        assert.ok(tree.pieces.reduce((sum, value) => sum + value, 0) >= 6);
+        const wood = context.list.find(problem => problem.id === 'wood-chess').randomChallenge();
+        assert.ok(wood.n >= 3 && wood.m >= 3);
+    }
 });
 
 console.log('All game tests passed.');

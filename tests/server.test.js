@@ -19,12 +19,12 @@ function open(url) { return new Promise((resolve, reject) => { const socket = ne
     const port = server.address().port, url = `ws://127.0.0.1:${port}/ws`;
     const host = await open(url), guest = await open(url);
     const createdPromise = nextMessage(host, 'room_created');
-    host.send(JSON.stringify({ type: 'create_room', requestId: 'create', problemId: 'bash', setup: { id: 'bash', rule: 'bash' }, state: { currentPlayer: 1, piles: [3] } }));
-    const created = await createdPromise; assert.match(created.room.roomCode, /^[A-Z2-9]{6}$/); assert.equal(created.playerNumber, 1);
+    host.send(JSON.stringify({ type: 'create_room', requestId: 'create', problemId: 'bash', nickname: '星河', setup: { id: 'bash', rule: 'bash' }, state: { currentPlayer: 1, piles: [3] } }));
+    const created = await createdPromise; assert.match(created.room.roomCode, /^\d{4}$/); assert.equal(created.playerNumber, 1); assert.equal(created.room.names[0], '星河');
 
     const hostJoined = nextMessage(host, 'player_joined'), guestJoined = nextMessage(guest, 'room_joined');
-    guest.send(JSON.stringify({ type: 'join_room', requestId: 'join', roomCode: created.room.roomCode }));
-    const joined = await guestJoined; await hostJoined; assert.equal(joined.playerNumber, 2); assert.equal(joined.room.status, 'playing');
+    guest.send(JSON.stringify({ type: 'join_room', requestId: 'join', roomCode: created.room.roomCode, nickname: '清风' }));
+    const joined = await guestJoined; await hostJoined; assert.equal(joined.playerNumber, 2); assert.equal(joined.room.status, 'playing'); assert.deepEqual(joined.room.names, ['星河', '清风']);
 
     const hostUpdate = nextMessage(host, 'state_updated'), guestUpdate = nextMessage(guest, 'state_updated');
     host.send(JSON.stringify({ type: 'sync_state', baseVersion: 1, state: { currentPlayer: 2, piles: [2] }, description: '玩家1取1个' }));
@@ -34,6 +34,18 @@ function open(url) { return new Promise((resolve, reject) => { const socket = ne
     resumedSocket.send(JSON.stringify({ type: 'resume_room', requestId: 'resume', roomCode: created.room.roomCode, playerToken: created.playerToken }));
     const resumed = await resumedPromise; assert.equal(resumed.playerNumber, 1); assert.equal(resumed.room.state.piles[0], 2);
 
+    const hostFinished = nextMessage(resumedSocket, 'game_finished'), guestFinished = nextMessage(guest, 'game_finished');
+    resumedSocket.send(JSON.stringify({ type: 'finish_game', winner: 1, state: { currentPlayer: 2, piles: [0], finished: true }, reason: '测试结束' }));
+    await hostFinished; await guestFinished;
+
+    const rematchRequested = nextMessage(resumedSocket, 'rematch_requested');
+    guest.send(JSON.stringify({ type: 'rematch_request' }));
+    const request = await rematchRequested; assert.equal(request.playerName, '清风');
+
+    const hostRestarted = nextMessage(resumedSocket, 'game_restarted'), guestRestarted = nextMessage(guest, 'game_restarted');
+    resumedSocket.send(JSON.stringify({ type: 'restart_game', problemId: 'nim', setup: { id: 'nim', rule: 'nim' }, state: { currentPlayer: 2, piles: [3, 4, 5] } }));
+    const restarted = await guestRestarted; await hostRestarted; assert.equal(restarted.room.roomCode, created.room.roomCode); assert.equal(restarted.room.problemId, 'nim'); assert.deepEqual(restarted.room.names, ['星河', '清风']); assert.equal(restarted.room.status, 'playing');
+
     host.close(); guest.close(); resumedSocket.close(); rooms.clear(); await new Promise(resolve => server.close(resolve));
-    console.log('✓ WebSocket 房间创建、加入、同步与重连');
+    console.log('✓ WebSocket 房间创建、加入、同步、重连与同房续局');
 })().catch(async error => { console.error(error); try { await new Promise(resolve => server.close(resolve)); } catch {} process.exitCode = 1; });

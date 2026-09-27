@@ -68,18 +68,20 @@ function createPeer(socket) {
     socket.on('close', () => handleClose(peer)); socket.on('error', () => socket.destroy()); clients.add(peer); return peer;
 }
 const code = () => {
-    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    if (rooms.size >= 9000) throw new Error('房间数量已满');
     let value = '';
-    do { value = Array.from(crypto.randomBytes(6), byte => alphabet[byte % alphabet.length]).join(''); } while (rooms.has(value));
+    do { value = String(crypto.randomInt(1000, 10000)); } while (rooms.has(value));
     return value;
 };
 const token = () => crypto.randomBytes(18).toString('base64url');
+const nickname = (value, fallback) => String(value || fallback).replace(/[<>\u0000-\u001f]/g, '').trim().slice(0, 12) || fallback;
 const send = (ws, message) => ws && !ws.socket.destroyed && ws.send(JSON.stringify(message));
 const publicRoom = room => ({
     roomCode: room.code, problemId: room.problemId, setup: room.setup,
     state: room.state, status: room.status, version: room.version,
     winner: room.winner ?? null, reason: room.reason || '',
-    connected: room.players.map(player => Boolean(player?.socket && !player.socket.socket.destroyed))
+    connected: room.players.map(player => Boolean(player?.socket && !player.socket.socket.destroyed)),
+    names: [...room.names]
 });
 const broadcast = (room, message, except = null) => room.players.forEach(player => {
     if (player?.socket !== except) send(player?.socket, message);
@@ -102,7 +104,7 @@ function handleMessage(ws, raw) {
         if (message.type === 'create_room') {
             if (!message.problemId || !message.setup || !message.state) return closeWithError(ws, requestId, '房间配置不完整');
             const roomCode = code(), playerToken = token();
-            const room = { code: roomCode, problemId: message.problemId, setup: message.setup, state: message.state, status: 'waiting', version: 0, players: [null, null], updatedAt: Date.now() };
+            const room = { code: roomCode, problemId: message.problemId, setup: message.setup, state: message.state, status: 'waiting', version: 0, players: [null, null], names: [nickname(message.nickname, '玩家1'), null], updatedAt: Date.now() };
             rooms.set(roomCode, room); attach(ws, room, 1, playerToken);
             send(ws, { type: 'room_created', requestId, playerNumber: 1, playerToken, room: publicRoom(room) });
             return;
@@ -111,7 +113,7 @@ function handleMessage(ws, raw) {
             const room = rooms.get(String(message.roomCode || '').toUpperCase());
             if (!room) return closeWithError(ws, requestId, '房间不存在或已过期');
             if (room.status !== 'waiting' || room.players[1]) return closeWithError(ws, requestId, '房间已满或已经开始');
-            const playerToken = token(); attach(ws, room, 2, playerToken); room.status = 'playing'; room.version++;
+            const playerToken = token(); room.names[1] = nickname(message.nickname, '玩家2'); attach(ws, room, 2, playerToken); room.status = 'playing'; room.version++;
             send(ws, { type: 'room_joined', requestId, playerNumber: 2, playerToken, room: publicRoom(room) });
             broadcast(room, { type: 'player_joined', room: publicRoom(room) }, ws);
             return;
@@ -140,6 +142,15 @@ function handleMessage(ws, raw) {
         } else if (message.type === 'finish_game') {
             room.state = message.state || room.state; room.status = 'finished'; room.winner = [0, 1, 2].includes(message.winner) ? message.winner : 0; room.reason = String(message.reason || '').slice(0, 80); room.version++;
             broadcast(room, { type: 'game_finished', winner: [0, 1, 2].includes(message.winner) ? message.winner : 0, reason: String(message.reason || '').slice(0, 80), room: publicRoom(room) });
+        } else if (message.type === 'restart_game') {
+            if (ws.playerNumber !== 1) return closeWithError(ws, requestId, '只有房主可以开始下一局');
+            if (room.status !== 'finished') return closeWithError(ws, requestId, '当前对局尚未结束');
+            if (!message.problemId || !message.setup || !message.state || ![1, 2].includes(message.state.currentPlayer)) return closeWithError(ws, requestId, '下一局配置不完整');
+            room.problemId = message.problemId; room.setup = message.setup; room.state = message.state; room.status = 'playing'; room.winner = null; room.reason = ''; room.version++;
+            broadcast(room, { type: 'game_restarted', room: publicRoom(room) });
+        } else if (message.type === 'rematch_request') {
+            if (room.status !== 'finished') return closeWithError(ws, requestId, '当前对局尚未结束');
+            broadcast(room, { type: 'rematch_requested', playerNumber: ws.playerNumber, playerName: room.names[ws.playerNumber - 1], room: publicRoom(room) }, ws);
         } else if (message.type === 'ping') {
             send(ws, { type: 'pong', now: Date.now() });
         }
