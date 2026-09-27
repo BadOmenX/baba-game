@@ -81,7 +81,7 @@ const publicRoom = room => ({
     state: room.state, status: room.status, version: room.version,
     winner: room.winner ?? null, reason: room.reason || '',
     connected: room.players.map(player => Boolean(player?.socket && !player.socket.socket.destroyed)),
-    names: [...room.names]
+    names: [...room.names], humanSlots: room.humanSlots || 2, chat: [...(room.chat || [])]
 });
 const broadcast = (room, message, except = null) => room.players.forEach(player => {
     if (player?.socket !== except) send(player?.socket, message);
@@ -104,7 +104,10 @@ function handleMessage(ws, raw) {
         if (message.type === 'create_room') {
             if (!message.problemId || !message.setup || !message.state) return closeWithError(ws, requestId, '房间配置不完整');
             const roomCode = code(), playerToken = token();
-            const room = { code: roomCode, problemId: message.problemId, setup: message.setup, state: message.state, status: 'waiting', version: 0, players: [null, null], names: [nickname(message.nickname, '玩家1'), null], updatedAt: Date.now() };
+            const playerCount = Math.max(2, Math.min(4, Number(message.setup.playerCount) || 2)), humanSlots = Math.max(1, Math.min(playerCount, Number(message.setup.humanSlots) || 2));
+            const names = Array(playerCount).fill(null); names[0] = nickname(message.nickname, '玩家1');
+            for (let index = humanSlots; index < playerCount; index++) names[index] = `策略 AI ${index - humanSlots + 1}`;
+            const room = { code: roomCode, problemId: message.problemId, setup: message.setup, state: message.state, status: humanSlots === 1 ? 'playing' : 'waiting', version: 0, players: Array(playerCount).fill(null), names, humanSlots, chat: [], updatedAt: Date.now() };
             rooms.set(roomCode, room); attach(ws, room, 1, playerToken);
             send(ws, { type: 'room_created', requestId, playerNumber: 1, playerToken, room: publicRoom(room) });
             return;
@@ -112,9 +115,11 @@ function handleMessage(ws, raw) {
         if (message.type === 'join_room') {
             const room = rooms.get(String(message.roomCode || '').toUpperCase());
             if (!room) return closeWithError(ws, requestId, '房间不存在或已过期');
-            if (room.status !== 'waiting' || room.players[1]) return closeWithError(ws, requestId, '房间已满或已经开始');
-            const playerToken = token(); room.names[1] = nickname(message.nickname, '玩家2'); attach(ws, room, 2, playerToken); room.status = 'playing'; room.version++;
-            send(ws, { type: 'room_joined', requestId, playerNumber: 2, playerToken, room: publicRoom(room) });
+            const seat = room.players.slice(0, room.humanSlots).findIndex(player => !player);
+            if (room.status !== 'waiting' || seat < 0) return closeWithError(ws, requestId, '房间已满或已经开始');
+            const playerNumber = seat + 1, playerToken = token(); room.names[seat] = nickname(message.nickname, `玩家${playerNumber}`); attach(ws, room, playerNumber, playerToken);
+            if (room.players.slice(0, room.humanSlots).every(Boolean)) room.status = 'playing'; room.version++;
+            send(ws, { type: 'room_joined', requestId, playerNumber, playerToken, room: publicRoom(room) });
             broadcast(room, { type: 'player_joined', room: publicRoom(room) }, ws);
             return;
         }
@@ -134,9 +139,10 @@ function handleMessage(ws, raw) {
         room.updatedAt = Date.now();
         if (message.type === 'sync_state') {
             if (room.status !== 'playing') return closeWithError(ws, requestId, '对局不在进行中');
-            if (room.state.currentPlayer !== ws.playerNumber) return closeWithError(ws, requestId, '还没有轮到你');
+            const aiTurn = Array.isArray(room.setup.aiPlayers) && room.setup.aiPlayers.includes(room.state.currentPlayer) && ws.playerNumber === 1;
+            if (room.state.currentPlayer !== ws.playerNumber && !aiTurn) return closeWithError(ws, requestId, '还没有轮到你');
             if (message.baseVersion !== room.version) return send(ws, { type: 'state_conflict', room: publicRoom(room) });
-            if (!message.state || ![1, 2].includes(message.state.currentPlayer)) return closeWithError(ws, requestId, '游戏状态无效');
+            if (!message.state || !Number.isInteger(message.state.currentPlayer) || message.state.currentPlayer < 1 || message.state.currentPlayer > room.players.length) return closeWithError(ws, requestId, '游戏状态无效');
             room.state = message.state; room.version++;
             broadcast(room, { type: 'state_updated', playerNumber: ws.playerNumber, description: String(message.description || '').slice(0, 120), room: publicRoom(room) });
         } else if (message.type === 'finish_game') {
@@ -145,12 +151,23 @@ function handleMessage(ws, raw) {
         } else if (message.type === 'restart_game') {
             if (ws.playerNumber !== 1) return closeWithError(ws, requestId, '只有房主可以开始下一局');
             if (room.status !== 'finished') return closeWithError(ws, requestId, '当前对局尚未结束');
-            if (!message.problemId || !message.setup || !message.state || ![1, 2].includes(message.state.currentPlayer)) return closeWithError(ws, requestId, '下一局配置不完整');
+            const nextCount = Math.max(2, Math.min(4, Number(message.setup?.playerCount) || 2));
+            if (!message.problemId || !message.setup || !message.state || nextCount < room.humanSlots || !Number.isInteger(message.state.currentPlayer) || message.state.currentPlayer < 1 || message.state.currentPlayer > nextCount) return closeWithError(ws, requestId, '下一局配置不完整');
+            room.players.length = nextCount; room.names.length = nextCount;
+            for (let index = room.humanSlots; index < nextCount; index++) { room.players[index] = null; room.names[index] = `策略 AI ${index - room.humanSlots + 1}`; }
+            message.setup.playerCount = nextCount; message.setup.humanSlots = room.humanSlots; message.setup.aiPlayers = Array.from({ length: nextCount - room.humanSlots }, (_, index) => room.humanSlots + index + 1);
             room.problemId = message.problemId; room.setup = message.setup; room.state = message.state; room.status = 'playing'; room.winner = null; room.reason = ''; room.version++;
             broadcast(room, { type: 'game_restarted', room: publicRoom(room) });
         } else if (message.type === 'rematch_request') {
             if (room.status !== 'finished') return closeWithError(ws, requestId, '当前对局尚未结束');
             broadcast(room, { type: 'rematch_requested', playerNumber: ws.playerNumber, playerName: room.names[ws.playerNumber - 1], room: publicRoom(room) }, ws);
+        } else if (message.type === 'chat_message') {
+            const now = Date.now(); if (ws.lastChatAt && now - ws.lastChatAt < 700) return closeWithError(ws, requestId, '消息发送太快'); ws.lastChatAt = now;
+            let text = String(message.text || '').replace(/[<>\u0000-\u001f]/g, '').trim().slice(0, 120); if (!text) return;
+            const blocked = ['傻逼','操你','妈的','草泥马','垃圾','废物','fuck','shit','bitch'];
+            for (const word of blocked) text = text.replace(new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '*'.repeat(Math.min(word.length, 6)));
+            const chat = { playerNumber: ws.playerNumber, playerName: room.names[ws.playerNumber - 1], text, at: now };
+            room.chat.push(chat); if (room.chat.length > 50) room.chat.shift(); broadcast(room, { type: 'chat_message', chat });
         } else if (message.type === 'ping') {
             send(ws, { type: 'pong', now: Date.now() });
         }

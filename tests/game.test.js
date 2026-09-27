@@ -129,11 +129,17 @@ test('Chomp 吃掉右下区域且毒块使当前玩家失败', () => {
     game.switchPlayer(); assert.equal(game.makeChompMove(0, 0), true); assert.equal(game.checkGameOver(), 1);
 });
 
+test('四人游戏按席位循环并由拿走最后石子的玩家获胜', () => {
+    const game = new GameEngine({ rule: 'party-bash', piles: [4], maxTake: 3, playerCount: 4, startingPlayer: 3, id: 'party-bash' });
+    assert.equal(game.currentPlayer, 3); game.makeMove(0, 1); game.switchPlayer(); assert.equal(game.currentPlayer, 4); game.switchPlayer(); assert.equal(game.currentPlayer, 1);
+    game.currentPlayer = 4; assert.equal(game.makeMove(0, 3), true); assert.equal(game.checkGameOver(), 4);
+});
+
 test('随机挑战答案由求解器生成', () => {
     const context = { GameSolvers };
     vm.createContext(context);
     vm.runInContext(`${fs.readFileSync(require.resolve('../js/problems.js'), 'utf8')}\nthis.list=PROBLEMS;`, context);
-    assert.equal(context.list.length, 14);
+    assert.equal(context.list.length, 16);
     const graph = context.list.find(problem => problem.id === 'tom-jerry').randomChallenge();
     assert.equal(graph.answer, GameSolvers.tomCanForceWin(graph.n, graph.edges, graph.tom, graph.jerry) ? 'Yes' : 'No');
     const string = context.list.find(problem => problem.id === 'string-game').randomChallenge();

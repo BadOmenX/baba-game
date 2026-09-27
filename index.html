@@ -18,6 +18,7 @@
         </nav>
         <div class="theme-picker" aria-label="界面风格">
             <button class="theme-trigger" id="theme-trigger" onclick="cycleTheme()" title="切换界面风格"><span id="theme-icon">✦</span><span id="theme-name">极光</span></button>
+            <button class="code-focus-btn" id="code-focus-btn" onclick="toggleCodeFocus()" title="切换专注伪装">⌘ 专注</button>
         </div>
     </header>
 
@@ -27,13 +28,13 @@
                 <h1>🕹️ 巴巴博弈</h1>
                 <div class="eyebrow"><span class="live-dot"></span> 实时房间已就绪</div>
                 <p class="subtitle">棋盘博弈 · Nim 变体 · 树上博弈 · 在线实时对战</p>
-                <p class="hero-desc">14 种可交互玩法，一人练习或用 4 位房间码邀请朋友</p>
+                <p class="hero-desc">16 种可交互玩法，支持 1–4 人与 AI 混合对战</p>
                 <div class="hero-buttons">
                     <button class="btn-primary btn-lg pulse" onclick="switchPage('battle')">⚔️ 开始对战</button>
                     <button class="btn-secondary btn-lg" onclick="switchPage('problems')">📚 浏览题库</button>
                 </div>
                 <div class="hero-stats">
-                    <div class="stat"><span class="stat-num">14</span><span class="stat-label">可玩规则</span></div>
+                    <div class="stat"><span class="stat-num">16</span><span class="stat-label">可玩规则</span></div>
                     <div class="stat"><span class="stat-num">2P</span><span class="stat-label">实时联机</span></div>
                     <div class="stat"><span class="stat-num">3</span><span class="stat-label">视觉风格</span></div>
                 </div>
@@ -61,7 +62,16 @@
                     </div>
                     <div class="mode-select">
                         <button class="mode-btn active" data-mode="single" onclick="selectMode('single')">🤖 单人模式</button>
-                        <button class="mode-btn" data-mode="multi" onclick="selectMode('multi')">👥 双人对战</button>
+                        <button class="mode-btn" data-mode="multi" onclick="selectMode('multi')">👥 联机房间</button>
+                    </div>
+                    <div class="config-row room-time-row">
+                        <label for="turn-time-select">每步限时：</label>
+                        <select id="turn-time-select" class="modern-select"><option value="15">15 秒</option><option value="30" selected>30 秒</option><option value="45">45 秒</option><option value="60">60 秒</option><option value="90">90 秒</option><option value="0">不限时</option></select>
+                        <small>房主创建房间时生效</small>
+                    </div>
+                    <div class="party-config hidden" id="party-config">
+                        <div><label for="player-count-select">总人数</label><select id="player-count-select" class="modern-select" onchange="syncPartyConfig()"><option value="3">3 人</option><option value="4">4 人</option></select></div>
+                        <div><label for="ai-count-select">AI 席位</label><select id="ai-count-select" class="modern-select"><option value="0">无 AI</option><option value="1">1 个 AI</option><option value="2">2 个 AI</option><option value="3">3 个 AI</option></select></div>
                     </div>
                     <div id="single-config">
                         <div class="config-row">
@@ -116,6 +126,7 @@
                         <div class="player-name" id="name-p2">玩家2</div>
                         <div class="player-timer" id="timer-p2">30</div>
                     </div>
+                    <div class="party-extra-players" id="party-extra-players"></div>
                 </div>
                 <div class="rule-hint" id="rule-hint"></div>
                 <div class="game-board" id="game-board"></div>
@@ -124,6 +135,11 @@
                     <h4>📜 对战记录</h4>
                     <div id="log-list"></div>
                 </div>
+                <aside class="room-chat" id="room-chat">
+                    <div class="chat-heading"><div><span>●</span><h4>房间聊天</h4></div><small>文明交流 · 自动过滤不当内容</small></div>
+                    <div class="chat-messages" id="chat-messages"></div>
+                    <div class="chat-compose"><input id="chat-input" maxlength="120" placeholder="说点什么…" autocomplete="off"><button onclick="sendChat()">发送</button></div>
+                </aside>
             </div>
         </section>
     </main>
@@ -152,6 +168,25 @@
                 <div class="mini-rule-grid" id="mini-rule-grid"></div>
             </div>
         </div>
+    </div>
+    <div class="code-disguise" aria-hidden="true">
+        <div class="code-titlebar"><span>◫</span><span>baba-game — Visual Studio Code</span><span>—　□　×</span></div>
+        <div class="code-activity">▱<br>⌕<br>⑂<br>▷<br>◫</div>
+        <div class="code-explorer"><b>EXPLORER</b><span>⌄ BABA-GAME</span><span>　⌄ js</span><span>　　◉ game.js</span><span>　　JS app.js</span><span>　　JS server.js</span><span>　⌄ tests</span><span>　　◇ game.test.js</span></div>
+        <div class="code-editor-bg"><div class="code-tabs">JS　game.js　×</div><pre><i>1</i> <b>class</b> GameEngine {
+<i>2</i>   <b>constructor</b>(state) {
+<i>3</i>     <em>this</em>.currentPlayer = state.player;
+<i>4</i>     <em>this</em>.strategy = <span>'optimal'</span>;
+<i>5</i>   }
+<i>6</i>
+<i>7</i>   <b>evaluatePosition</b>(board) {
+<i>8</i>     <b>const</b> moves = board.legalMoves();
+<i>9</i>     <b>return</b> moves.map(move =&gt; ({
+<i>10</i>       move, score: minimax(board.next(move))
+<i>11</i>     })).sort((a, b) =&gt; b.score - a.score);
+<i>12</i>   }
+<i>13</i> }</pre></div>
+        <div class="code-statusbar">main*　　↻ 0 errors　0 warnings　　　　　　　　　Ln 10, Col 48　UTF-8　JavaScript</div>
     </div>
     <footer><p>巴巴博弈 · BadOmenX · 2026</p></footer>
 

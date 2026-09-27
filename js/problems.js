@@ -214,5 +214,21 @@ const PROBLEMS = [
         customizable: false, configLabel: '', configPlaceholder: '',
         ruleHint: '每次选择一块巧克力，并吃掉它右下方的所有块；被迫吃下左上角毒块者失败。',
         link: 'https://en.wikipedia.org/wiki/Chomp', mode: 'interactive', rows: 4, cols: 6
+    },
+    {
+        id: 'party-bash', name: '多人抢石子', icon: '🎉',
+        description: '3–4 人轮流取 1–3 枚石子，可加入 AI，拿走最后一枚者胜。',
+        difficulty: 'easy', defaultPiles: [32], maxTake: 3, rule: 'party-bash', party: true,
+        timeLimit: 30, boardType: 'single-row', ai: { style: 'multiplayer' }, customizable: false,
+        configLabel: '', configPlaceholder: '', ruleHint: '3–4 人依次取 1–3 枚石子；拿走最后一枚者获胜。AI 会计算剩余玩家与安全余数。',
+        link: 'https://en.wikipedia.org/wiki/Subtraction_game', mode: 'interactive', minPlayers: 3, maxPlayers: 4
+    },
+    {
+        id: 'party-nim', name: '多人 Nim', icon: '👥',
+        description: '3–4 人多堆取子混战，支持真人与智能 AI 混合席位。',
+        difficulty: 'medium', defaultPiles: [5,7,9,11], maxTake: null, rule: 'party-nim', party: true,
+        timeLimit: 45, boardType: 'multi-pile', ai: { style: 'multiplayer' }, customizable: false,
+        configLabel: '', configPlaceholder: '', ruleHint: '3–4 人依次从任意一堆取任意正数，拿走最后一枚者获胜。',
+        link: 'https://en.wikipedia.org/wiki/Nim', mode: 'interactive', minPlayers: 3, maxPlayers: 4
     }
 ];

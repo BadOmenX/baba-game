@@ -34,6 +34,10 @@ function open(url) { return new Promise((resolve, reject) => { const socket = ne
     resumedSocket.send(JSON.stringify({ type: 'resume_room', requestId: 'resume', roomCode: created.room.roomCode, playerToken: created.playerToken }));
     const resumed = await resumedPromise; assert.equal(resumed.playerNumber, 1); assert.equal(resumed.room.state.piles[0], 2);
 
+    const hostChat = nextMessage(resumedSocket, 'chat_message'), guestChat = nextMessage(guest, 'chat_message');
+    guest.send(JSON.stringify({ type: 'chat_message', text: '你这个傻逼 fuck' }));
+    const filteredChat = await hostChat; await guestChat; assert.equal(filteredChat.chat.text.includes('傻逼'), false); assert.equal(filteredChat.chat.text.toLowerCase().includes('fuck'), false);
+
     const hostFinished = nextMessage(resumedSocket, 'game_finished'), guestFinished = nextMessage(guest, 'game_finished');
     resumedSocket.send(JSON.stringify({ type: 'finish_game', winner: 1, state: { currentPlayer: 2, piles: [0], finished: true }, reason: '测试结束' }));
     await hostFinished; await guestFinished;
@@ -46,6 +50,13 @@ function open(url) { return new Promise((resolve, reject) => { const socket = ne
     resumedSocket.send(JSON.stringify({ type: 'restart_game', problemId: 'nim', setup: { id: 'nim', rule: 'nim' }, state: { currentPlayer: 2, piles: [3, 4, 5] } }));
     const restarted = await guestRestarted; await hostRestarted; assert.equal(restarted.room.roomCode, created.room.roomCode); assert.equal(restarted.room.problemId, 'nim'); assert.deepEqual(restarted.room.names, ['星河', '清风']); assert.equal(restarted.room.status, 'playing');
 
-    host.close(); guest.close(); resumedSocket.close(); rooms.clear(); await new Promise(resolve => server.close(resolve));
-    console.log('✓ WebSocket 房间创建、加入、同步、重连与同房续局');
+    host.close(); guest.close(); resumedSocket.close(); rooms.clear();
+
+    const partyHost = await open(url), partyGuests = [await open(url), await open(url), await open(url)];
+    const partyCreatedPromise = nextMessage(partyHost, 'room_created');
+    partyHost.send(JSON.stringify({ type:'create_room', requestId:'party-create', nickname:'房主', problemId:'party-nim', setup:{ id:'party-nim', rule:'party-nim', playerCount:4, humanSlots:4, aiPlayers:[] }, state:{ currentPlayer:1, playerCount:4, piles:[3,4,5] } }));
+    const partyCreated = await partyCreatedPromise; assert.equal(partyCreated.room.names.length, 4);
+    for (let index=0; index<3; index++) { const hostNotice=nextMessage(partyHost,'player_joined'), joinedPromise=nextMessage(partyGuests[index],'room_joined'); partyGuests[index].send(JSON.stringify({type:'join_room',requestId:`p${index}`,roomCode:partyCreated.room.roomCode,nickname:`玩家${index+2}`})); const joinedParty=await joinedPromise; await hostNotice; assert.equal(joinedParty.playerNumber,index+2); if(index<2)assert.equal(joinedParty.room.status,'waiting'); else assert.equal(joinedParty.room.status,'playing'); }
+    partyHost.close(); partyGuests.forEach(socket=>socket.close()); rooms.clear(); await new Promise(resolve => server.close(resolve));
+    console.log('✓ WebSocket 房间、敏感词聊天、同房续局与四人组局');
 })().catch(async error => { console.error(error); try { await new Promise(resolve => server.close(resolve)); } catch {} process.exitCode = 1; });

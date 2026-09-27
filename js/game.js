@@ -2,7 +2,8 @@ class GameEngine {
     constructor(problem) {
         this.problem = problem; this.rule = problem.rule;
         this.piles = [...(problem.piles || problem.defaultPiles || [])];
-        this.currentPlayer = problem.startingPlayer === 2 ? 2 : 1; this.moveHistory = []; this.selectedPile = null; this.selectedCell = null;
+        this.playerCount = Math.max(2, Math.min(4, Number(problem.playerCount) || 2));
+        this.currentPlayer = Number.isInteger(problem.startingPlayer) && problem.startingPlayer >= 1 && problem.startingPlayer <= this.playerCount ? problem.startingPlayer : 1; this.moveHistory = []; this.selectedPile = null; this.selectedCell = null;
         this.grid = problem.board ? problem.board.map(row => [...row]) : null;
         if (!this.grid && ['tic-tac-toe', 'connect-four'].includes(this.rule)) this.grid = Array.from({ length: problem.rows }, () => Array(problem.cols).fill(null));
         if (!this.grid && this.rule === 'chomp') this.grid = Array.from({ length: problem.rows }, () => Array(problem.cols).fill(0));
@@ -23,7 +24,7 @@ class GameEngine {
         if (this.finished || !Number.isInteger(count) || count <= 0) return false;
         if (pileIndex === -1) return ['wythoff', 'yet-another'].includes(this.rule) && this.piles.length > 0 && count <= Math.min(...this.piles);
         if (!Number.isInteger(pileIndex) || pileIndex < 0 || pileIndex >= this.piles.length || count > this.piles[pileIndex]) return false;
-        if (this.rule === 'bash' && this.problem.maxTake && count > this.problem.maxTake) return false;
+        if (['bash', 'party-bash'].includes(this.rule) && this.problem.maxTake && count > this.problem.maxTake) return false;
         return this.rule !== 'fragmented-nim' || pileIndex === this.forcedPile;
     }
 
@@ -158,7 +159,7 @@ class GameEngine {
     }
 
     checkGameOver() {
-        if (['bash', 'nim', 'wythoff', 'fragmented-nim', 'yet-another'].includes(this.rule) && this.piles.every(value => value === 0)) return this.currentPlayer;
+        if (['bash', 'nim', 'wythoff', 'fragmented-nim', 'yet-another', 'party-bash', 'party-nim'].includes(this.rule) && this.piles.every(value => value === 0)) return this.currentPlayer;
         if (this.rule === 'euclid' && this.piles.some(value => value === 0)) return this.currentPlayer;
         if (this.rule === 'bunny-egg' && this.legalBunnyMoves().length === 0) return this.currentPlayer === 1 ? 2 : 1;
         if (this.rule === 'tree-game' && this.legalTreeMoves().length === 0) return this.currentPlayer === 1 ? 2 : 1;
@@ -171,16 +172,16 @@ class GameEngine {
         return null;
     }
 
-    switchPlayer() { this.currentPlayer = this.currentPlayer === 1 ? 2 : 1; this.selectedPile = null; this.selectedCell = null; }
+    switchPlayer() { this.currentPlayer = this.currentPlayer % this.playerCount + 1; this.selectedPile = null; this.selectedCell = null; }
     getState() {
-        return { piles: [...this.piles], currentPlayer: this.currentPlayer, moveHistory: this.moveHistory.map(item => ({ ...item })), problemId: this.problem.id,
+        return { piles: [...this.piles], currentPlayer: this.currentPlayer, playerCount: this.playerCount, moveHistory: this.moveHistory.map(item => ({ ...item })), problemId: this.problem.id,
             grid: this.grid ? this.grid.map(row => [...row]) : null, emptyPos: this.emptyPos ? [...this.emptyPos] : null,
             scores: { ...this.scores }, selectedPile: this.selectedPile, forcedPile: this.forcedPile, text: this.text,
             tree: this.tree ? { edges: this.tree.edges.map(edge => [...edge]), root: this.tree.root, pieces: [...this.tree.pieces] } : null,
             tom: this.tom, jerry: this.jerry, round: this.round, maxRounds: this.maxRounds, poisonedBy: this.poisonedBy, finished: this.finished };
     }
     loadState(state) {
-        this.piles = [...(state.piles || [])]; this.currentPlayer = state.currentPlayer === 2 ? 2 : 1;
+        this.piles = [...(state.piles || [])]; this.playerCount = Math.max(2, Math.min(4, Number(state.playerCount) || this.playerCount || 2)); this.currentPlayer = Number.isInteger(state.currentPlayer) && state.currentPlayer >= 1 && state.currentPlayer <= this.playerCount ? state.currentPlayer : 1;
         this.moveHistory = Array.isArray(state.moveHistory) ? state.moveHistory.map(item => ({ ...item })) : [];
         this.grid = state.grid ? state.grid.map(row => [...row]) : null; this.emptyPos = state.emptyPos ? [...state.emptyPos] : GameEngine.findEmpty(this.grid || []);
         this.scores = { p1: Number(state.scores?.p1) || 0, p2: Number(state.scores?.p2) || 0 };

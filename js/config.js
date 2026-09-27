@@ -1,5 +1,5 @@
 const APP_CONFIG = Object.freeze({
     roomReconnectWindow: 120000,
-    themes: ['aurora', 'paper', 'arcade'],
+    themes: ['aurora', 'paper', 'arcade', 'code'],
     defaultTheme: 'aurora'
 });
